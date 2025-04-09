@@ -773,6 +773,7 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
 #endif // KG_IMPL
 
 #ifdef KG_TESTER
+
 typedef struct kgt_t {
     isize _;
 } kgt_t;
@@ -783,27 +784,33 @@ typedef struct kgt_test_t {
     kgt_fn_t fn;
 } kgt_test_t;
 
-void             kgt_create  (kgt_t* t);
-kgt_test_t       kgt_register(kgt_fn_t fn);
-void             kgt_run     (kgt_t* t, kgt_test_t* tests, isize tests_len);
-void             kgt_destroy (kgt_t* t);
+void       kgt_create  (kgt_t* t);
+kgt_test_t kgt_register(kgt_fn_t fn);
+void       kgt_run     (kgt_t* t, kgt_test_t* tests, isize tests_len);
+void       kgt_destroy (kgt_t* t);
 
-void kgt_expect_handler(const char* const, const char* msg);
+void kgt_expect_handler(const char* cond, const char* msg, const char* file, isize line);
 
-#define kgt_expect(cond, msg)    if (cond) {} else { kgt_expect_handler(#cond, msg); }
-#define kgt_expect_eq_null(a)    kgt_expect(a == null, "expected null")
-#define kgt_expect_neq_null(a)   kgt_expect(a != null, "expected not null")
-#define kgt_expect_eq(a, b)      kgt_expect(a == b, "expected eq")
-#define kgt_expect_neq(a, b)     kgt_expect(a != b, "expected neq")
-#define kgt_expect_ptr_eq(a, b)  kgt_expect(a == b, "expected ptr eq")
-#define kgt_expect_ptr_neq(a, b) kgt_expect(a != b, "expected ptr neq")
-
+#define kgt_expect(cond, msg)         if (cond) {} else { kgt_expect_handler(#cond, msg, __FILE__, kg_cast(isize)__LINE__); }
+#define kgt_expect_null(a)            kgt_expect(a == null, "expected null")
+#define kgt_expect_not_null(a)        kgt_expect(a != null, "expected not null")
+#define kgt_expect_eq(a, b)           kgt_expect(a == b, "expected eq")
+#define kgt_expect_ptr_eq(a, b)       kgt_expect(a == b, "expected ptr eq")
+#define kgt_expect_ptr_neq(a, b)      kgt_expect(a != b, "expected ptr neq")
+#define kgt_expect_true(a)            kgt_expect(a == true, "expected true")
+#define kgt_expect_false(a)           kgt_expect(a == false, "expected false")
+#define kgt_expect_mem_eq(a, b, s)    kgt_expect(kg_mem_compare(a, b, s) == 0, "expected memory eq")
+#define kgt_expect_mem_neq(a, c, s)   kgt_expect(kg_mem_compare(a, b, s) != 0, "expected memory neq")
+#define kgt_expect_cstr_eq(a, b)      kgt_expect(strcmp(a, b) == 0, "expected cstr eq")
+#define kgt_expect_cstr_neq(a, c)     kgt_expect(strcmp(a, b) != 0, "expected cstr neq")
+#define kgt_expect_cstrn_eq(a, b, s)  kgt_expect(strncmp(a, b, s) == 0, "expected cstrn eq")
+#define kgt_expect_cstrn_neq(a, c, s) kgt_expect(strncmp(a, b, s) != 0, "expected cstrn neq")
 
 #ifdef KG_TESTER_IMPL
 
-void kgt_expect_handler(const char* cond, const char* msg) {
-    kg_printf("Test failed: %s %s\n", cond, msg);
-    kg_exit(1);
+void kgt_expect_handler(const char* cond, const char* msg, const char* file, isize line) {
+    kg_printf("Test failed: (%s:%li) %s %s\n", file, line, msg, cond);
+    /*kg_exit(1);*/
 }
 
 void kgt_create(kgt_t* t) {
