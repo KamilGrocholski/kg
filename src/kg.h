@@ -72,6 +72,8 @@ typedef ptrdiff_t isize;
     #include <sys/stat.h>
 #endif
 
+#define kg_exit(code) exit(code)
+
 kg_extern void kg_printf(const char* fmt, ...);
 
 kg_extern void kg_assert_handler(const char* prefix, const char* condition, const char* file, isize line, const char* fmt, ...);
@@ -739,7 +741,7 @@ void kg_assert_handler(const char* prefix, const char* condition, const char* fi
         kg_printf("%s\n", string);
         kg_string_destroy(string);
     }
-    exit(1);
+    kg_exit(1);
 }
 
 void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char* fmt, ...) {
@@ -764,8 +766,65 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
         kg_string_destroy(string);
     }
     if (level == KG_LOG_LEVEL_FATAL) {
-        exit(1);
+        kg_exit(1);
     }
 }
 
 #endif // KG_IMPL
+
+#ifdef KG_TESTER
+typedef struct kgt_t {
+    isize _;
+} kgt_t;
+
+typedef void (*kgt_fn_t)(kgt_t* t);
+
+typedef struct kgt_test_t {
+    kgt_fn_t fn;
+} kgt_test_t;
+
+void             kgt_create  (kgt_t* t);
+kgt_test_t       kgt_register(kgt_fn_t fn);
+void             kgt_run     (kgt_t* t, kgt_test_t* tests, isize tests_len);
+void             kgt_destroy (kgt_t* t);
+
+void kgt_expect_handler(const char* const, const char* msg);
+
+#define kgt_expect(cond, msg)    if (cond) {} else { kgt_expect_handler(#cond, msg); }
+#define kgt_expect_eq_null(a)    kgt_expect(a == null, "expected null")
+#define kgt_expect_neq_null(a)   kgt_expect(a != null, "expected not null")
+#define kgt_expect_eq(a, b)      kgt_expect(a == b, "expected eq")
+#define kgt_expect_neq(a, b)     kgt_expect(a != b, "expected neq")
+#define kgt_expect_ptr_eq(a, b)  kgt_expect(a == b, "expected ptr eq")
+#define kgt_expect_ptr_neq(a, b) kgt_expect(a != b, "expected ptr neq")
+
+
+#ifdef KG_TESTER_IMPL
+
+void kgt_expect_handler(const char* cond, const char* msg) {
+    kg_printf("Test failed: %s %s\n", cond, msg);
+    kg_exit(1);
+}
+
+void kgt_create(kgt_t* t) {
+    *t = (kgt_t){0};
+}
+kgt_test_t kgt_register(kgt_fn_t fn) {
+    kgt_test_t out = (kgt_test_t){
+        .fn = fn,
+    };
+    return out;
+}
+void kgt_run(kgt_t* t, kgt_test_t* tests, isize tests_len) {
+    for (isize i = 0; i < tests_len; i++) {
+        kgt_test_t test = tests[i];
+        test.fn(t);
+    }
+}
+void kgt_destroy(kgt_t* t) {
+    *t = (kgt_t){0};
+}
+
+#endif // KG_TESTER_IMPL
+
+#endif // KG_TESTER
