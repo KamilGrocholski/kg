@@ -113,18 +113,33 @@ void* kg_mem_move   (void* dest, const void* src, isize size);
 
 typedef struct kg_allocator_t kg_allocator_t;
 
+typedef struct kg_arena_t {
+    kg_allocator_t* allocator;
+    void*           real_ptr;
+    isize           max_size;
+    isize           allocated_size;
+} kg_arena_t;
+
+b32   kg_arena_create   (kg_arena_t* a, kg_allocator_t* allocator, isize max_size);
+isize kg_arena_allocated(kg_arena_t* a);
+isize kg_arena_available(kg_arena_t* a);
+isize kg_arena_mem_size (kg_arena_t* a);
+void  kg_arena_reset    (kg_arena_t* a);
+void  kg_arena_destroy  (kg_arena_t* a);
+
 kg_allocator_t kg_allocator_default(void);
+kg_allocator_t kg_allocator_temp   (kg_arena_t* a);
 
 #define kg_allocator_alloc_one(a, T)                    (T*)((a)->proc.alloc(a, kg_sizeof(T)))
 #define kg_allocator_alloc_array(a, T, n)               (T*)((a)->proc.alloc(a, kg_sizeof(T) * n))
 #define kg_allocator_alloc(a, size)                     (a)->proc.alloc(a, size)
 #define kg_allocator_free(a, ptr, size)                 (a)->proc.free(a, ptr, size)
-#define kg_allocator_free_all(a, size)                  (a)->proc.free_all(a, size)
+#define kg_allocator_free_all(a)                        (a)->proc.free_all(a)
 #define kg_allocator_resize(a, ptr, old_size, new_size) (a)->proc.resize(a, ptr, old_size, new_size)
 
 typedef void* (*kg_allocator_allocate_fn_t)(kg_allocator_t* a, isize size);
 typedef void  (*kg_allocator_free_fn_t)    (kg_allocator_t* a, void* ptr, isize size);
-typedef void  (*kg_allocator_free_all_fn_t)(kg_allocator_t* a, isize size);
+typedef void  (*kg_allocator_free_all_fn_t)(kg_allocator_t* a);
 typedef void* (*kg_allocator_resize_fn_t)  (kg_allocator_t* a, void* ptr, isize old_size, isize new_size);
 
 typedef struct kg_allocator_t {
@@ -136,10 +151,6 @@ typedef struct kg_allocator_t {
     } proc;
     void* context;
 } kg_allocator_t;
-
-typedef struct kg_arena_t {
-    isize len;
-} kg_arena_t;
 
 typedef struct kg_string_header_t {
     isize           len;
@@ -307,9 +318,9 @@ b32           kg_time_is_after (kg_time_t t, kg_time_t o);
 b32           kg_time_is_before(kg_time_t t, kg_time_t o);
 kg_duration_t kg_time_diff     (kg_time_t t, kg_time_t other);
 kg_date_t     kg_time_to_date  (kg_time_t t);
-i32           kg_time_year     (kg_time_t t);
-kg_month_t    kg_time_month    (kg_time_t t);
-i32           kg_time_day      (kg_time_t t);
+i32           kg_time_to_year  (kg_time_t t);
+kg_month_t    kg_time_to_month (kg_time_t t);
+i32           kg_time_to_day   (kg_time_t t);
 
 kg_duration_t kg_duration_create         (i64 milliseconds);
 kg_duration_t kg_duration_since          (kg_time_t t);
@@ -367,9 +378,8 @@ void kg_allocator_default_free(kg_allocator_t* a, void* ptr, isize size) {
     kg_cast(void)size;
     kg_mem_free(ptr);
 }
-void kg_allocator_default_free_all(kg_allocator_t* a, isize size) {
+void kg_allocator_default_free_all(kg_allocator_t* a) {
     kg_cast(void)a;
-    kg_cast(void)size;
 }
 void* kg_allocator_default_resize(kg_allocator_t* a, void* ptr, isize old_size, isize new_size) {
     kg_cast(void)a;
@@ -385,6 +395,91 @@ kg_inline kg_allocator_t kg_allocator_default(void) {
             .resize   = kg_allocator_default_resize,
         },
         .context = null,
+    };
+}
+
+b32 kg_arena_create(kg_arena_t* a, kg_allocator_t* allocator, isize max_size) {
+    b32 out_ok = false;
+    kg_arena_t arena = {
+        .allocator      = allocator,
+        .real_ptr       = allocator->proc.alloc(allocator, max_size),
+        .max_size       = max_size,
+        .allocated_size = 0,
+    };
+    if (arena.real_ptr) {
+        *a = arena;
+        out_ok = true;
+    }
+    return out_ok;
+}
+void* kg_arena_alloc(kg_arena_t* a, isize size) {
+    void* out = null;
+    if (a && size > 0) {
+        isize available = kg_arena_available(a);
+        if (available >= size) {
+            out = a->allocator->proc.alloc(a->allocator, size);
+            if (out) {
+                a->allocated_size += size;
+            }
+        }
+    }
+    return out;
+}
+isize kg_arena_allocated(kg_arena_t* a) {
+    return a ? a->allocated_size : 0;
+}
+isize kg_arena_available(kg_arena_t* a) {
+    isize out = 0;
+    if (a && a->max_size > a->allocated_size) {
+        out = a->max_size - a->allocated_size;
+    }
+    return out;
+}
+isize kg_arena_mem_size(kg_arena_t* a) {
+    return a ? a->max_size : 0;
+}
+void kg_arena_reset(kg_arena_t* a) {
+    if (a) {
+        kg_mem_zero(a->real_ptr, kg_arena_mem_size(a));
+    }
+}
+void kg_arena_destroy(kg_arena_t* a) {
+    if (a) {
+        a->allocator->proc.free(a->allocator, a->real_ptr, kg_arena_mem_size(a));
+        *a = (kg_arena_t){0};
+    }
+}
+
+void* kg_allocator_temp_alloc(kg_allocator_t* a, isize size) {
+    kg_arena_t* arena = kg_cast(kg_arena_t*)a->context;
+    return kg_arena_alloc(arena, size);
+}
+void kg_allocator_temp_free(kg_allocator_t* a, void* ptr, isize size) {
+    kg_cast(void)a;
+    kg_cast(void)ptr;
+    kg_cast(void)size;
+}
+void kg_allocator_temp_free_all(kg_allocator_t* a) {
+    kg_arena_t* arena = kg_cast(kg_arena_t*)a->context;
+    kg_arena_destroy(arena);
+}
+void* kg_allocator_temp_resize(kg_allocator_t* a, void* ptr, isize old_size, isize new_size) {
+    kg_cast(void)ptr;
+    kg_cast(void)old_size;
+    void* out_mem = null;
+    kg_arena_t* arena = kg_cast(kg_arena_t*)a->context;
+    out_mem = kg_arena_alloc(arena, new_size);
+    return out_mem;
+}
+kg_inline kg_allocator_t kg_allocator_temp(kg_arena_t* a) {
+    return (kg_allocator_t){
+        .proc = {
+            .alloc    = kg_allocator_temp_alloc,
+            .free     = kg_allocator_temp_free,
+            .free_all = kg_allocator_temp_free_all,
+            .resize   = kg_allocator_temp_resize,
+        },
+        .context = a,
     };
 }
 

@@ -137,6 +137,24 @@ void test_parse() {
     kgt_expect_eq(i, 234);
 }
 
+void test_allocator_temp() {
+    kg_allocator_t backing_allocator = kg_allocator_default();
+    kg_arena_t arena;
+    isize arena_max_size = 4096;
+    kg_arena_create(&arena, &backing_allocator, arena_max_size);
+    kgt_expect_not_null(arena.real_ptr);
+    kgt_expect_eq(arena.max_size, arena_max_size);
+
+    kg_allocator_t temp_allocator = kg_allocator_temp(&arena);
+    void* mem = kg_allocator_alloc(&temp_allocator, arena_max_size + 1);
+    kgt_expect_null(mem);
+
+    mem = kg_allocator_alloc(&temp_allocator, arena_max_size);
+    kgt_expect_not_null(mem);
+
+    kg_allocator_free_all(&temp_allocator);
+}
+
 int main() {
     kgt_t t;
     kgt_create(&t);
@@ -159,6 +177,7 @@ int main() {
         kgt_register(test_math),
         kgt_register(test_format),
         kgt_register(test_parse),
+        kgt_register(test_allocator_temp),
     }; 
     isize tests_len = kg_sizeof(tests) / kg_sizeof(kgt_test_t);
 
