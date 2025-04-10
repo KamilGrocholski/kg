@@ -672,7 +672,7 @@ isize kg_string_mem_size(kg_string_t s) {
     return out_mem_size;
 }
 b32 kg_string_is_valid(kg_string_t s) {
-    b32 out_ok = true;
+    b32 out_ok = false;
     if (s) {
         kg_string_header_t* h = kg_string_header(s);
         out_ok = kg_cast(isize)strnlen(s, h->len + 1) == h->len;
@@ -743,7 +743,7 @@ kg_inline b32 kg_str_is_null_or_empty(const kg_str_t s) {
 kg_inline b32 kg_str_is_valid_cstr(const kg_str_t s) {
     b32 out_ok = false;
     if (s.ptr) {
-        out_ok = strnlen(s.ptr, s.len);
+        out_ok = kg_cast(isize)strnlen(s.ptr, s.len) == s.len;
     }
     return out_ok;
 }
