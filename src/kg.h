@@ -134,12 +134,12 @@ kg_allocator_t kg_allocator_temp   (kg_arena_t* a);
 #define kg_allocator_alloc_array(a, T, n)               (T*)((a)->proc.alloc(a, kg_sizeof(T) * n))
 #define kg_allocator_alloc(a, size)                     (a)->proc.alloc(a, size)
 #define kg_allocator_free(a, ptr, size)                 (a)->proc.free(a, ptr, size)
-#define kg_allocator_free_all(a)                        (a)->proc.free_all(a)
+#define kg_allocator_free_all(a, clear)                 (a)->proc.free_all(a, clear)
 #define kg_allocator_resize(a, ptr, old_size, new_size) (a)->proc.resize(a, ptr, old_size, new_size)
 
 typedef void* (*kg_allocator_allocate_fn_t)(kg_allocator_t* a, isize size);
 typedef void  (*kg_allocator_free_fn_t)    (kg_allocator_t* a, void* ptr, isize size);
-typedef void  (*kg_allocator_free_all_fn_t)(kg_allocator_t* a);
+typedef void  (*kg_allocator_free_all_fn_t)(kg_allocator_t* a, b32 clear);
 typedef void* (*kg_allocator_resize_fn_t)  (kg_allocator_t* a, void* ptr, isize old_size, isize new_size);
 
 typedef struct kg_allocator_t {
@@ -378,8 +378,9 @@ void kg_allocator_default_free(kg_allocator_t* a, void* ptr, isize size) {
     kg_cast(void)size;
     kg_mem_free(ptr);
 }
-void kg_allocator_default_free_all(kg_allocator_t* a) {
+void kg_allocator_default_free_all(kg_allocator_t* a, b32 clear) {
     kg_cast(void)a;
+    kg_cast(void)clear;
 }
 void* kg_allocator_default_resize(kg_allocator_t* a, void* ptr, isize old_size, isize new_size) {
     kg_cast(void)a;
@@ -441,6 +442,7 @@ isize kg_arena_mem_size(kg_arena_t* a) {
 void kg_arena_reset(kg_arena_t* a) {
     if (a) {
         kg_mem_zero(a->real_ptr, kg_arena_mem_size(a));
+        a->allocated_size = 0;
     }
 }
 void kg_arena_destroy(kg_arena_t* a) {
@@ -459,9 +461,13 @@ void kg_allocator_temp_free(kg_allocator_t* a, void* ptr, isize size) {
     kg_cast(void)ptr;
     kg_cast(void)size;
 }
-void kg_allocator_temp_free_all(kg_allocator_t* a) {
+void kg_allocator_temp_free_all(kg_allocator_t* a, b32 clear) {
     kg_arena_t* arena = kg_cast(kg_arena_t*)a->context;
-    kg_arena_destroy(arena);
+    if (clear) {
+        kg_arena_reset(arena);
+    } else {
+        kg_arena_destroy(arena);
+    }
 }
 void* kg_allocator_temp_resize(kg_allocator_t* a, void* ptr, isize old_size, isize new_size) {
     kg_cast(void)ptr;

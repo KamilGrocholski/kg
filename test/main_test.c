@@ -152,7 +152,12 @@ void test_allocator_temp() {
     mem = kg_allocator_alloc(&temp_allocator, arena_max_size);
     kgt_expect_not_null(mem);
 
-    kg_allocator_free_all(&temp_allocator);
+    kg_allocator_free_all(&temp_allocator, true);
+    kgt_expect_not_null(arena.real_ptr);
+    kgt_expect_eq(arena.allocated_size, 0);
+
+    kg_allocator_free_all(&temp_allocator, false);
+    kgt_expect_null(arena.real_ptr);
 }
 
 int main() {
