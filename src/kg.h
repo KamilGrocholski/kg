@@ -74,9 +74,9 @@ typedef ptrdiff_t isize;
 
 #define kg_exit(code) exit(code)
 
-kg_extern void kg_printf(const char* fmt, ...);
+void kg_printf(const char* fmt, ...);
 
-kg_extern void kg_assert_handler(const char* prefix, const char* condition, const char* file, isize line, const char* fmt, ...);
+void kg_assert_handler(const char* prefix, const char* condition, const char* file, isize line, const char* fmt, ...);
 
 #define kg_assert_msg(cond, fmt, ...) if (cond) {} else {kg_assert_handler("Assertion failed", #cond, __FILE__, kg_cast(isize)__LINE__, fmt, ##__VA_ARGS__);}
 #define kg_assert(cond)               kg_assert_msg(cond, null)
@@ -92,7 +92,7 @@ typedef enum kg_log_level_t {
     KG_LOG_LEVEL__SENTINEL,
 } kg_log_level_t;
 
-kg_extern void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char* fmt, ...);
+void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char* fmt, ...);
 
 #define kg_log_trace(fmt, ...) kg_log_handler(KG_LOG_LEVEL_TRACE, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
 #define kg_log_debug(fmt, ...) kg_log_handler(KG_LOG_LEVEL_DEBUG, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
@@ -113,7 +113,7 @@ void* kg_mem_move   (void* dest, const void* src, isize size);
 
 typedef struct kg_allocator_t kg_allocator_t;
 
-kg_extern kg_allocator_t kg_allocator_default(void);
+kg_allocator_t kg_allocator_default(void);
 
 #define kg_allocator_alloc_one(a, T)                    (T*)((a)->proc.alloc(a, kg_sizeof(T)))
 #define kg_allocator_alloc_array(a, T, n)               (T*)((a)->proc.alloc(a, kg_sizeof(T) * n))
@@ -194,8 +194,18 @@ b32      kg_str_is_equal           (const kg_str_t s, const kg_str_t other);
 b32      kg_str_contains           (const kg_str_t s, const kg_str_t needle);
 b32      kg_str_has_prefix         (const kg_str_t s, const kg_str_t prefix);
 b32      kg_str_has_suffix         (const kg_str_t s, const kg_str_t suffix);
+b32      kg_str_cut_prefix         (kg_str_t* s, const kg_str_t prefix);
+b32      kg_str_cut_suffix         (kg_str_t* s, const kg_str_t suffix);
 isize    kg_str_index              (const kg_str_t s, const kg_str_t needle);
 isize    kg_str_index_char         (const kg_str_t s, char needle);
+
+b32 kg_str_to_b32(b32* b, const kg_str_t s);
+b32 kg_str_to_u64(u64* u, const kg_str_t s);
+b32 kg_str_to_i64(i64* i, const kg_str_t s);
+
+kg_str_t kg_b32_to_str(b32 b);
+kg_str_t kg_u64_to_str(u64 u);
+kg_str_t kg_i64_to_str(u64 i);
 
 typedef struct kg_darray_header_t {
     isize           len;
@@ -250,12 +260,72 @@ isize             kg_file_size        (kg_file_t* f);
 kg_file_content_t kg_file_read_content(kg_allocator_t* a, const char* filename);
 b32               kg_file_close       (kg_file_t* f);
 
+typedef struct kg_time_t {
+    i64 milliseconds;
+} kg_time_t;
+
+typedef struct kg_duration_t {
+    i64 milliseconds;
+    // u64 seconds;
+    // u64 nanoseconds;
+} kg_duration_t;
+
+typedef enum kg_month_t {
+    January   = 1, 
+    February, 
+    March, 
+    April, 
+    May, 
+    June, 
+    July, 
+    August, 
+    September, 
+    October, 
+    November, 
+    December, 
+} kg_month_t;
+
+typedef struct kg_date_t {
+    i32        year;
+    kg_month_t month;
+    i32        day;
+} kg_date_t;
+
+const u64 KG_NANOSECOND  = 1;
+const u64 KG_MICROSECOND = 1000 * KG_NANOSECOND;
+const u64 KG_MILLISECOND = 1000 * KG_MICROSECOND;
+const u64 KG_SECOND      = 1000 * KG_MILLISECOND;
+const u64 KG_MINUTE      = 60 * KG_SECOND;
+const u64 KG_HOUR        = 60 * KG_MINUTE;
+
+void          kg_time_sleep    (u64 nanoseconds);
+kg_time_t     kg_time_now      (void);
+kg_time_t     kg_time_add      (kg_time_t t, kg_duration_t d);
+kg_time_t     kg_time_sub      (kg_time_t t, kg_duration_t d);
+b32           kg_time_is_equal (kg_time_t t, kg_time_t o);
+b32           kg_time_is_after (kg_time_t t, kg_time_t o);
+b32           kg_time_is_before(kg_time_t t, kg_time_t o);
+kg_duration_t kg_time_diff     (kg_time_t t, kg_time_t other);
+kg_date_t     kg_time_to_date  (kg_time_t t);
+i32           kg_time_year     (kg_time_t t);
+kg_month_t    kg_time_month    (kg_time_t t);
+i32           kg_time_day      (kg_time_t t);
+
+kg_duration_t kg_duration_create         (i64 milliseconds);
+kg_duration_t kg_duration_since          (kg_time_t t);
+i64           kg_duration_to_milliseconds(kg_duration_t d);
+
+f64 kg_math_pow(f64 base, f64 exponent);
+
 #ifdef KG_IMPL
 
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <time.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 kg_inline void* kg_mem_alloc(isize size) {
     return malloc(size);
@@ -280,9 +350,9 @@ kg_inline i32 kg_mem_compare(const void* a, const void* b, isize size) {
 }
 kg_inline void kg_mem_swap(void* a, void* b, isize size) {
     u8 temp[size];
-    memcpy(temp, a, size);
-    memcpy(a, b, size);
-    memcpy(b, temp, size);
+    kg_mem_copy(temp, a, size);
+    kg_mem_copy(a, b, size);
+    kg_mem_copy(b, temp, size);
 }
 kg_inline void* kg_mem_move(void* dest, const void* src, isize size) {
     return memmove(dest, src, size);
@@ -395,7 +465,7 @@ kg_string_t kg_string_append(kg_string_t s, kg_string_t other) {
 }
 kg_string_t kg_string_append_fmt(kg_string_t s, const char* fmt, ...) {
     kg_string_t out_string = s;
-    if (fmt) {
+    if (fmt && s) {
         va_list args;
         va_start(args, fmt);
         out_string = kg_string_append_fmt_v(out_string, fmt, args);
@@ -405,7 +475,7 @@ kg_string_t kg_string_append_fmt(kg_string_t s, const char* fmt, ...) {
 }
 kg_string_t kg_string_append_fmt_v(kg_string_t s, const char* fmt, va_list args) {
     kg_string_t out_string = s;
-    if (fmt) {
+    if (fmt && s) {
         va_list args_copy;
         va_copy(args_copy, args);
         isize length_check = vsnprintf(0, 0, fmt, args_copy);
@@ -600,6 +670,23 @@ kg_inline b32 kg_str_has_suffix(const kg_str_t s, const kg_str_t suffix) {
     }
     return out_ok;
 }
+b32 kg_str_cut_prefix(kg_str_t* s, const kg_str_t prefix) {
+    b32 out_ok = false;
+    if (kg_str_has_prefix(*s, prefix)) {
+        s->len -= prefix.len;
+        s->ptr += prefix.len;
+        out_ok = true;
+    }
+    return out_ok;
+}
+b32 kg_str_cut_suffix(kg_str_t* s, const kg_str_t suffix) {
+    b32 out_ok = false;
+    if (kg_str_has_suffix(*s, suffix)) {
+        s->len -= suffix.len;
+        out_ok = true;
+    }
+    return out_ok;
+}
 isize kg_str_index(const kg_str_t s, const kg_str_t needle) {
     isize out_index = -1;
     if (s.len >= needle.len) {
@@ -621,6 +708,71 @@ isize kg_str_index_char(const kg_str_t s, char needle) {
         }
     }
     return out_index;
+}
+
+#define KG_VALID_BOOL_STRS_MAP_LEN 5
+static struct {kg_str_t str; b32 bool;} KG_VALID_BOOL_STRS_MAP[KG_VALID_BOOL_STRS_MAP_LEN] = {
+    {{.len = 4, .ptr = "true"}, true},
+    {{.len = 2, .ptr = "ok"}, true},
+    {{.len = 3, .ptr = "yes"}, true},
+    {{.len = 5, .ptr = "false"}, false},
+    {{.len = 2, .ptr = "no"}, false},
+};
+b32 kg_str_to_b32(b32* b, const kg_str_t s) {
+    b32 out_ok = false;
+    for (isize i = 0; i < KG_VALID_BOOL_STRS_MAP_LEN; i++) {
+        if (kg_str_is_equal(s, KG_VALID_BOOL_STRS_MAP[i].str)) {
+            *b = KG_VALID_BOOL_STRS_MAP[i].bool;
+            out_ok = true;
+        }
+    }
+    return out_ok;
+}
+b32 kg_str_to_u64(u64* u, const kg_str_t s) {
+    b32 out_ok = true;
+    u64 value = 0;
+    for (isize i = 0; i < s.len; i++) {
+        char c = s.ptr[i];
+        if (c < '0' || c > '9') {
+            out_ok = false;
+            break;
+        }
+        value = value * 10 + (c - '0');
+    }
+    *u = value;
+    return out_ok;
+}
+b32 kg_str_to_i64(i64* i, const kg_str_t s) {
+    b32 out_ok = true;
+    i64 value = 0;
+    char c1 = s.ptr[0];
+    if (c1 == '-') {
+        out_ok = kg_str_to_u64(kg_cast(u64*)(&value), (kg_str_t){.len = s.len - 1, .ptr = s.ptr + 1});
+        value = -value;
+    } else {
+        out_ok = kg_str_to_u64(kg_cast(u64*)(&value), s);
+    }
+    *i = value;
+    return out_ok;
+}
+kg_str_t kg_b32_to_str(b32 b) {
+    kg_str_t out_str;
+    if (b) {
+        out_str = (kg_str_t){.len = 4, .ptr = "true"};
+    } else {
+        out_str = (kg_str_t){.len = 5, .ptr = "false"};
+    }
+    return out_str;
+}
+kg_str_t kg_u64_to_str(u64 u) {
+    char buf[21];
+    isize len = sprintf(buf, "%lu", u);
+    return (kg_str_t){.len = len, .ptr = buf};
+}
+kg_str_t kg_i64_to_str(u64 i) {
+    char buf[21];
+    isize len = sprintf(buf, "%li", i);
+    return (kg_str_t){.len = len, .ptr = buf};
 }
 
 void* kg_darray_create_(kg_allocator_t* allocator, isize stride, isize cap) {
@@ -651,7 +803,7 @@ void* kg_darray_grow_(void* d, isize n) {
 kg_inline void kg_printf(const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    vprintf(fmt, args);
+    vfprintf(stdout, fmt, args);
     va_end(args);
 }
 
@@ -706,7 +858,7 @@ kg_file_content_t kg_file_read_content(kg_allocator_t* a, const char* filename) 
         if (size >= 0) {
             out_content.cstr = kg_allocator_alloc_array(a, char, size + 1);
             if (out_content.cstr) {
-                kg_mem_zero(out_content.cstr, size);
+                kg_mem_zero(out_content.cstr, size + 1);
                 isize bytes_read = fread(out_content.cstr, 1, size, kg_cast(FILE*)f.handle);
                 out_content.len = bytes_read;
                 out_content.cstr[out_content.len] = '\0';
@@ -726,6 +878,91 @@ b32 kg_file_close(kg_file_t* f) {
         out_ok = true;
     }
     return out_ok;
+}
+
+void kg_time_sleep(u64 nanoseconds) {
+    struct timespec ts = {
+        .tv_sec = nanoseconds / KG_SECOND,
+        .tv_nsec = nanoseconds % KG_SECOND,
+    };
+    nanosleep(&ts, null);
+}
+
+kg_time_t kg_time_now(void) {
+    struct timeval tv;
+    gettimeofday(&tv, null);
+    kg_time_t out = {
+        .milliseconds = kg_cast(i64)(tv.tv_sec * 1000 + tv.tv_usec / 1000),
+    };
+    return out;
+}
+kg_time_t kg_time_add(kg_time_t t, kg_duration_t d) {
+    kg_time_t out_time = (kg_time_t){.milliseconds = t.milliseconds + d.milliseconds};
+    return out_time;
+}
+kg_time_t kg_time_sub(kg_time_t t, kg_duration_t d) {
+    kg_time_t out_time = (kg_time_t){.milliseconds = t.milliseconds - d.milliseconds};
+    return out_time;
+}
+b32 kg_time_is_equal(kg_time_t t, kg_time_t o) {
+    return t.milliseconds == o.milliseconds;
+}
+b32 kg_time_is_after(kg_time_t t, kg_time_t o) {
+    return t.milliseconds > o.milliseconds;
+}
+b32 kg_time_is_before(kg_time_t t, kg_time_t o) {
+    return t.milliseconds < o.milliseconds;
+}
+kg_duration_t kg_time_diff(kg_time_t t, kg_time_t other) {
+    kg_duration_t out = { 
+        .milliseconds = t.milliseconds - other.milliseconds,
+    };
+    return out;
+}
+kg_date_t kg_time_to_date(kg_time_t t) {
+    i64 seconds = t.milliseconds / 1000;
+    struct tm *lt = localtime(&seconds);
+    kg_date_t out = {
+        .year  = lt->tm_year + 1900,
+        .month = lt->tm_mon + 1,
+        .day   = lt->tm_mday,
+    };
+    return out;
+}
+i32 kg_time_to_year(kg_time_t t) {
+    i64 seconds = t.milliseconds / 1000;
+    struct tm *lt = localtime(&seconds);
+    return lt->tm_year + 1900;
+}
+kg_month_t kg_time_to_month(kg_time_t t) {
+    i64 seconds = t.milliseconds / 1000;
+    struct tm *lt = localtime(&seconds);
+    return lt->tm_mon + 1;
+}
+i32 kg_time_to_day(kg_time_t t) {
+    i64 seconds = t.milliseconds / 1000;
+    struct tm *lt = localtime(&seconds);
+    return lt->tm_mday;
+}
+kg_duration_t kg_duration_create(i64 milliseconds) {
+    return (kg_duration_t){milliseconds};
+}
+kg_duration_t kg_duration_since(kg_time_t t) {
+    kg_duration_t out = { 
+        .milliseconds = kg_time_now().milliseconds - t.milliseconds,
+    };
+    return out;
+}
+i64 kg_duration_milliseconds(kg_duration_t d) {
+    return d.milliseconds;
+}
+
+kg_inline f64 kg_math_pow(f64 base, f64 exponent) {
+    f64 out = 1.0;
+    for (isize i = 0; i < exponent; i++) {
+        out *= base;
+    }
+    return out;
 }
 
 void kg_assert_handler(const char* prefix, const char* condition, const char* file, isize line, const char* fmt, ...) {
@@ -770,6 +1007,151 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
     }
 }
 
+#ifdef KG_FLAGS
+
+void kg_flag_str(kg_str_t* holder, const char* name, const kg_str_t default_value, const char* usage);
+void kg_flags_parse(i32 argc, char* argv[]);
+void kg_flags_usage(void);
+
+#ifdef KG_FLAGS_IMPL
+
+typedef enum kg_flag_kind_t {
+    KG_FLAG_KIND_STR = 0,
+    KG_FLAG_KIND_B32,
+    KG_FLAG_KIND__SENTINEL,
+} kg_flag_kind_t;
+
+typedef struct kg_flag_t {
+    kg_flag_kind_t    kind;
+    kg_str_t          raw_value;
+    const char*       name;
+    const kg_str_t    name_str;
+    const char*       usage;
+    const kg_str_t    usage_str;
+    union {
+        kg_str_t* holder_str;
+        b32*      holder_b32;
+    };
+    union {
+        const kg_str_t default_str;
+        b32            default_b32;
+    };
+} kg_flag_t;
+
+#define KG_FLAGS_MAX_LEN 128
+
+static kg_flag_t kg_flags[KG_FLAGS_MAX_LEN];
+static isize     kg_flags_len = 0;
+
+const char* kg_flag_kind_to_cstr(kg_flag_kind_t k) {
+    static const char* kind_cstrs[] = {
+        [KG_FLAG_KIND_STR] = "str",
+        [KG_FLAG_KIND_B32] = "b32",
+    };
+    return kind_cstrs[k];
+}
+void kg_flag_register_handler(kg_flag_t f) {
+    kg_assert(kg_flags_len <= KG_FLAGS_MAX_LEN);
+    kg_mem_copy(kg_flags + kg_flags_len, &f, kg_sizeof(kg_flag_t));
+    kg_flags_len++;
+}
+void kg_flag_parse_str(kg_flag_t* f, kg_str_t raw_value) {
+    f->raw_value = raw_value;
+    kg_assert(!kg_str_is_null(raw_value));
+    *f->holder_str = raw_value;
+}
+void kg_flag_str(kg_str_t* holder, const char* name, const kg_str_t default_value, const char* usage) {
+    *holder = default_value;
+    kg_assert(holder);
+    kg_assert(name);
+    kg_assert(!kg_str_is_null(default_value));
+    kg_assert(usage);
+    kg_flag_t f = {
+        .kind        = KG_FLAG_KIND_STR,
+        .name        = name,
+        .name_str    = kg_str_create(name),
+        .usage       = usage,
+        .usage_str   = kg_str_create(usage),
+        .default_str = default_value,
+        .holder_str  = holder,
+    };
+    kg_flag_register_handler(f);
+}
+void kg_flag_parse_b32(kg_flag_t* f, kg_str_t raw_value) {
+    f->raw_value = raw_value;
+    kg_assert_msg(kg_str_to_b32(f->holder_b32, raw_value), "invalid str representation of b32")
+}
+void kg_flag_b32(b32* holder, const char* name, b32 default_value, const char* usage) {
+    *holder = default_value;
+    kg_assert(holder);
+    kg_assert(name);
+    kg_assert(usage);
+    kg_flag_t f = {
+        .kind        = KG_FLAG_KIND_B32,
+        .name        = name,
+        .name_str    = kg_str_create(name),
+        .usage       = usage,
+        .usage_str   = kg_str_create(usage),
+        .default_b32 = default_value,
+        .holder_b32  = holder,
+    };
+    kg_flag_register_handler(f);
+}
+void kg_flags_parse(i32 argc, char* argv[]) {
+    typedef struct kg_arg_meta_t {
+        kg_str_t name;
+        kg_str_t value;
+    }  kg_arg_meta_t;
+    kg_arg_meta_t arg_metas[KG_FLAGS_MAX_LEN];
+    isize arg_metas_len = 0;
+    kg_str_t arg_split = kg_str_create("=");
+    kg_str_t arg_prefix = kg_str_create("--");
+    for (i32 i = 1; i < argc; i++) {
+        char* arg = argv[i];
+        kg_str_t arg_str = kg_str_create(arg);
+        if (kg_str_has_prefix(arg_str, arg_prefix)) {
+            arg_str = kg_str_substr(arg_str, arg_prefix.len, arg_str.len);
+            kg_str_t name = kg_str_chop_first_split_by(&arg_str, arg_split);
+            kg_str_t value = arg_str;
+            arg_metas[arg_metas_len++] = (kg_arg_meta_t){
+                .name  = name,
+                .value = value,
+            };
+        }
+    }
+    kg_flag_t* flag;
+    for (i32 i = 0; i < kg_flags_len; i++) {
+        flag = &kg_flags[i];
+        kg_arg_meta_t arg_meta;
+        for (isize j = 0; j < arg_metas_len; j++) {
+            arg_meta = arg_metas[j];
+            if (kg_str_is_equal(flag->name_str, arg_meta.name)) {
+                switch(flag->kind) {
+                    case KG_FLAG_KIND_STR:
+                        kg_flag_parse_str(flag, arg_meta.value);
+                        break;
+                    case KG_FLAG_KIND_B32:
+                        kg_flag_parse_b32(flag, arg_meta.value);
+                        break;
+                    default:
+                        kg_panic("KG_FLAGS: unknown flag kind");
+                }
+                break;
+            }
+        }
+    }
+}
+void kg_flags_usage(void) {
+    for (isize i = 0; i < kg_flags_len; i++) {
+        kg_flag_t f = kg_flags[i];
+        kg_printf("--%s\n\tkind: %s\n\tusage: %s\n", f.name, kg_flag_kind_to_cstr(f.kind), f.usage);
+    }
+}
+
+#endif // KG_FLAGS_IMPL
+
+#endif // KG_FLAGS
+
 #endif // KG_IMPL
 
 #ifdef KG_TESTER
@@ -795,6 +1177,7 @@ void kgt_expect_handler(const char* cond, const char* msg, const char* file, isi
 #define kgt_expect_null(a)            kgt_expect(a == null, "expected null")
 #define kgt_expect_not_null(a)        kgt_expect(a != null, "expected not null")
 #define kgt_expect_eq(a, b)           kgt_expect(a == b, "expected eq")
+#define kgt_expect_neq(a, b)          kgt_expect(a != b, "expected neq")
 #define kgt_expect_ptr_eq(a, b)       kgt_expect(a == b, "expected ptr eq")
 #define kgt_expect_ptr_neq(a, b)      kgt_expect(a != b, "expected ptr neq")
 #define kgt_expect_true(a)            kgt_expect(a == true, "expected true")

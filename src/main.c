@@ -1,4 +1,6 @@
 #define KG_IMPL
+#define KG_FLAGS
+#define KG_FLAGS_IMPL
 #include "kg.h"
 
 typedef struct v_t {
@@ -6,7 +8,19 @@ typedef struct v_t {
     kg_str_t value;
 } v_t;
 
-int main() {
+int main(i32 argc, char* argv[]) {
+    kg_str_t name;
+    b32 help;
+    kg_flag_str(&name, "name", kg_str_create("kgapp"), "set app name");
+    kg_flag_b32(&help, "help", false, "show usage");
+    kg_flags_parse(argc, argv);
+
+    if (help) {
+        kg_flags_usage();
+        kg_exit(0);
+    }
+    kg_log_info("%.*s", name.len, name.ptr);
+
     kg_allocator_t allocator = kg_allocator_default();
 
     kg_file_content_t content = kg_file_read_content(&allocator, "./src/test.txt");
