@@ -51,9 +51,9 @@ typedef ptrdiff_t isize;
 #define F64_MIN 2.2250738585072014e-308
 #define F64_MAX 1.7976931348623157e+308
 
-#define true    1
-#define false   0
-#define null    NULL
+#define true  1
+#define false 0
+#define null  NULL
 
 #define kg_cast(T)       (T)
 #define kg_sizeof(T)     kg_cast(isize)sizeof(T)
@@ -1009,7 +1009,7 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
 
 #ifdef KG_FLAGS
 
-void kg_flag_str(kg_str_t* holder, const char* name, const kg_str_t default_value, const char* usage);
+void kg_flag_str   (kg_str_t* holder, const char* name, const kg_str_t default_value, const char* usage);
 void kg_flags_parse(i32 argc, char* argv[]);
 void kg_flags_usage(void);
 
@@ -1018,6 +1018,8 @@ void kg_flags_usage(void);
 typedef enum kg_flag_kind_t {
     KG_FLAG_KIND_STR = 0,
     KG_FLAG_KIND_B32,
+    KG_FLAG_KIND_U64,
+    KG_FLAG_KIND_I64,
     KG_FLAG_KIND__SENTINEL,
 } kg_flag_kind_t;
 
@@ -1031,10 +1033,14 @@ typedef struct kg_flag_t {
     union {
         kg_str_t* holder_str;
         b32*      holder_b32;
+        u64*      holder_u64;
+        i64*      holder_i64;
     };
     union {
         const kg_str_t default_str;
         b32            default_b32;
+        u64            default_u64;
+        i64            default_i64;
     };
 } kg_flag_t;
 
@@ -1047,6 +1053,8 @@ const char* kg_flag_kind_to_cstr(kg_flag_kind_t k) {
     static const char* kind_cstrs[] = {
         [KG_FLAG_KIND_STR] = "str",
         [KG_FLAG_KIND_B32] = "b32",
+        [KG_FLAG_KIND_U64] = "u64",
+        [KG_FLAG_KIND_I64] = "i64",
     };
     return kind_cstrs[k];
 }
@@ -1097,6 +1105,46 @@ void kg_flag_b32(b32* holder, const char* name, b32 default_value, const char* u
     };
     kg_flag_register_handler(f);
 }
+void kg_flag_parse_i64(kg_flag_t* f, kg_str_t raw_value) {
+    f->raw_value = raw_value;
+    kg_assert_msg(kg_str_to_i64(f->holder_i64, raw_value), "invalid str representation of i64")
+}
+void kg_flag_i64(i64* holder, const char* name, i64 default_value, const char* usage) {
+    *holder = default_value;
+    kg_assert(holder);
+    kg_assert(name);
+    kg_assert(usage);
+    kg_flag_t f = {
+        .kind        = KG_FLAG_KIND_I64,
+        .name        = name,
+        .name_str    = kg_str_create(name),
+        .usage       = usage,
+        .usage_str   = kg_str_create(usage),
+        .default_i64 = default_value,
+        .holder_i64  = holder,
+    };
+    kg_flag_register_handler(f);
+}
+void kg_flag_parse_u64(kg_flag_t* f, kg_str_t raw_value) {
+    f->raw_value = raw_value;
+    kg_assert_msg(kg_str_to_u64(f->holder_u64, raw_value), "invalid str representation of u64")
+}
+void kg_flag_u64(u64* holder, const char* name, u64 default_value, const char* usage) {
+    *holder = default_value;
+    kg_assert(holder);
+    kg_assert(name);
+    kg_assert(usage);
+    kg_flag_t f = {
+        .kind        = KG_FLAG_KIND_U64,
+        .name        = name,
+        .name_str    = kg_str_create(name),
+        .usage       = usage,
+        .usage_str   = kg_str_create(usage),
+        .default_u64 = default_value,
+        .holder_u64  = holder,
+    };
+    kg_flag_register_handler(f);
+}
 void kg_flags_parse(i32 argc, char* argv[]) {
     typedef struct kg_arg_meta_t {
         kg_str_t name;
@@ -1132,6 +1180,12 @@ void kg_flags_parse(i32 argc, char* argv[]) {
                         break;
                     case KG_FLAG_KIND_B32:
                         kg_flag_parse_b32(flag, arg_meta.value);
+                        break;
+                    case KG_FLAG_KIND_U64:
+                        kg_flag_parse_u64(flag, arg_meta.value);
+                        break;
+                    case KG_FLAG_KIND_I64:
+                        kg_flag_parse_i64(flag, arg_meta.value);
                         break;
                     default:
                         kg_panic("KG_FLAGS: unknown flag kind");

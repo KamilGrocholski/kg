@@ -11,8 +11,12 @@ typedef struct v_t {
 int main(i32 argc, char* argv[]) {
     kg_str_t name;
     b32 help;
+    u64 uv;
+    i64 iv;
     kg_flag_str(&name, "name", kg_str_create("kgapp"), "set app name");
     kg_flag_b32(&help, "help", false, "show usage");
+    kg_flag_u64(&uv, "uv", 234, "uv");
+    kg_flag_i64(&iv, "iv", -231, "iv");
     kg_flags_parse(argc, argv);
 
     if (help) {
@@ -20,6 +24,8 @@ int main(i32 argc, char* argv[]) {
         kg_exit(0);
     }
     kg_log_info("%.*s", name.len, name.ptr);
+    kg_log_info("%lu", uv);
+    kg_log_info("%li", iv);
 
     kg_allocator_t allocator = kg_allocator_default();
 
