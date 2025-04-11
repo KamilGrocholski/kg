@@ -1,6 +1,8 @@
 #define KG_IMPL
 #define KG_TESTER
 #define KG_TESTER_IMPL
+#define KG_THREADS
+#define KG_THREADS_IMPL
 #include "kg.h"
 
 void test_file_read_contant() {
@@ -79,6 +81,42 @@ void test_str_has_suffix() {
     kgt_expect_true(kg_str_has_suffix(a, b));
 }
 
+void test_str_chop_first_split_by() {
+    kg_str_t str = kg_str_create("this=1;is=2;something=3;to=4");
+    kg_str_t split_kvs = kg_str_create(";");
+    kg_str_t split_kv = kg_str_create("=");
+
+    kg_str_t kv = kg_str_chop_first_split_by(&str, split_kvs);
+    kg_str_t k = kg_str_chop_first_split_by(&kv, split_kv);
+    kgt_expect_true(kg_str_is_equal(k, kg_str_create("this")));
+    kg_str_t v = kv;
+    kgt_expect_true(kg_str_is_equal(v, kg_str_create("1")));
+    kgt_expect_true(kg_str_is_equal(str, kg_str_create("is=2;something=3;to=4")));
+
+    kv = kg_str_chop_first_split_by(&str, split_kvs);
+    k = kg_str_chop_first_split_by(&kv, split_kv);
+    kgt_expect_true(kg_str_is_equal(k, kg_str_create("is")));
+    v = kv;
+    kgt_expect_true(kg_str_is_equal(v, kg_str_create("2")));
+    kgt_expect_true(kg_str_is_equal(str, kg_str_create("something=3;to=4")));
+
+    kv = kg_str_chop_first_split_by(&str, split_kvs);
+    k = kg_str_chop_first_split_by(&kv, split_kv);
+    kgt_expect_true(kg_str_is_equal(k, kg_str_create("something")));
+    v = kv;
+    kgt_expect_true(kg_str_is_equal(v, kg_str_create("3")));
+    kgt_expect_true(kg_str_is_equal(str, kg_str_create("to=4")));
+
+    kv = kg_str_chop_first_split_by(&str, split_kvs);
+    k = kg_str_chop_first_split_by(&kv, split_kv);
+    kgt_expect_true(kg_str_is_equal(k, kg_str_create("to")));
+    v = kv;
+    kgt_expect_true(kg_str_is_equal(v, kg_str_create("4")));
+    kgt_expect_true(kg_str_is_equal(str, kg_str_create("")));
+
+    kgt_expect_true(kg_str_is_empty(str));
+}
+
 void test_duration_since() {
     kg_time_t t = kg_time_now();
     kg_duration_t d = kg_duration_since(t);
@@ -115,6 +153,10 @@ void test_math() {
     u64 a = 10;
     a = kg_math_pow(a, 3);
     kgt_expect_eq(a, 1000);
+
+    u64 b = 3;
+    b = kg_math_pow(b, 3);
+    kgt_expect_eq(b, 27);
 }
 
 void test_format() {
@@ -160,6 +202,46 @@ void test_allocator_temp() {
     kgt_expect_null(arena.real_ptr);
 }
 
+void test_queue() {
+    kg_allocator_t allocator = kg_allocator_default();
+    kg_queue_t q;
+    kg_queue_create(&q, &allocator, kg_sizeof(char), 64);
+    kgt_expect_not_null(q.real_ptr);
+    for (isize i = 0; i < 10; i++) {
+        char c = 'a' + i;
+        kgt_expect_true(kg_queue_enqueue(&q, &c));
+    }
+    for (isize i = 0; i < 10; i++) {
+        char c;
+        kgt_expect_true(kg_queue_deque(&q, &c));
+        kgt_expect_eq(c, 'a' + i);
+    }
+    kg_queue_destroy(&q);
+    kgt_expect_null(q.real_ptr);
+}
+
+isize _worker_fn(kg_thread_t* t) {
+    kgt_expect_not_null(t);
+    kgt_expect_not_null(t->user_data);
+    isize* value = kg_cast(isize*)t->user_data;
+    kgt_expect_not_null(value);
+    kgt_expect_eq(*value, 5);
+    return 0;
+}
+
+void test_worker() {
+    kg_allocator_t allocator = kg_allocator_default();
+    kg_worker_t wt;
+    kg_worker_create(&wt, &allocator);
+    isize value = 5;
+    kg_worker_add(&wt, _worker_fn, &value);
+    kg_worker_add(&wt, _worker_fn, &value);
+    kg_worker_add(&wt, _worker_fn, &value);
+    kg_worker_run(&wt);
+    kg_worker_wait(&wt);
+    kg_worker_destroy(&wt);
+}
+
 int main() {
     kgt_t t;
     kgt_create(&t);
@@ -175,6 +257,7 @@ int main() {
         kgt_register(test_str_contains),
         kgt_register(test_str_has_prefix),
         kgt_register(test_str_has_suffix),
+        kgt_register(test_str_chop_first_split_by),
         kgt_register(test_duration_since),
         kgt_register(test_time_date),
         kgt_register(test_time_diff),
@@ -183,6 +266,8 @@ int main() {
         kgt_register(test_format),
         kgt_register(test_parse),
         kgt_register(test_allocator_temp),
+        kgt_register(test_queue),
+        kgt_register(test_worker),
     }; 
     isize tests_len = kg_sizeof(tests) / kg_sizeof(kgt_test_t);
 
