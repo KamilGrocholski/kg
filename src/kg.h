@@ -247,27 +247,6 @@ void*   kg_darray_grow_                  (void* d, isize n);
     kg_allocator_free(h->allocator, h, kg_darray_mem_size(d)); \
 } while(0)
 
-typedef struct kg_ringbuffer_t {
-    kg_allocator_t* allocator;
-    isize           cap;
-    isize           len;
-    isize           stride;
-    isize           read;
-    isize           write;
-    void*           real_ptr;
-} kg_ringbuffer_t;
-
-b32    kg_ringbuffer_create          (kg_ringbuffer_t* r, kg_allocator_t* allocator, isize stride, isize cap);
-b32    kg_ringbuffer_push_front      (kg_ringbuffer_t* r, void* o);
-b32    kg_ringbuffer_push_back       (kg_ringbuffer_t* r, void* o);
-b32    kg_ringbuffer_pop_front       (kg_ringbuffer_t* r, void* o);
-b32    kg_ringbuffer_pop_back        (kg_ringbuffer_t* r, void* o);
-b32    kg_ringbuffer_grow            (kg_ringbuffer_t* r, isize n);
-b32    kg_ringbuffer_ensure_available(kg_ringbuffer_t* r, isize n);
-isize  kg_ringbuffer_available       (kg_ringbuffer_t* r);
-isize  kg_ringbuffer_mem_size        (kg_ringbuffer_t* r);
-void   kg_ringbuffer_destroy         (kg_ringbuffer_t* r);
-
 typedef struct kg_queue_t {
     kg_allocator_t* allocator;
     isize           len;
@@ -1064,95 +1043,6 @@ void* kg_darray_grow_(void* d, isize n) {
     return null;
 }
 
-b32 kg_ringbuffer_create(kg_ringbuffer_t* r, kg_allocator_t* allocator, isize stride, isize cap) {
-    b32 out_ok = false;
-    *r = (kg_ringbuffer_t){
-        .allocator = allocator,
-        .cap       = cap,
-        .stride    = stride,
-        .real_ptr  = kg_allocator_alloc(allocator, stride * cap),
-    };
-    if (r->real_ptr) {
-        out_ok = true;
-    }
-    return out_ok;
-}
-b32 kg_ringbuffer_push_front(kg_ringbuffer_t* r, void* o) {
-    b32 out_ok = false;
-    out_ok = kg_ringbuffer_ensure_available(r, 1);
-    if (out_ok) {
-        out_ok = kg_mem_copy(kg_cast(u8*)r->real_ptr + r->write, o, r->stride) != null; 
-        r->len++;
-        r->write++;
-    }
-    return out_ok;
-}
-b32 kg_ringbuffer_push_back(kg_ringbuffer_t* r, void* o) {
-    b32 out_ok = true;
-    out_ok = kg_ringbuffer_ensure_available(r, 1);
-    if (out_ok) {
-        out_ok = kg_mem_copy(kg_cast(u8*)r->real_ptr + r->write, o, r->stride) != null; 
-        r->len++;
-        r->write++;
-    }
-    return out_ok;
-}
-b32 kg_ringbuffer_pop_front(kg_ringbuffer_t* r, void* o) {
-    b32 out_ok = false;
-    if (r->read < r->write) {
-        out_ok = kg_mem_copy(o, kg_cast(u8*)r->real_ptr + r->read, r->stride) != null;
-        if (out_ok) {
-            r->read++;
-        }
-    }
-    return out_ok;
-}
-b32 kg_ringbuffer_pop_back(kg_ringbuffer_t* r, void* o) {
-    b32 out_ok = true;
-    if (r->read < r->write) {
-        out_ok = kg_mem_copy(o, kg_cast(u8*)r->real_ptr + r->read, r->stride) != null;
-        if (out_ok) {
-            r->read++;
-        }
-    }
-    return out_ok;
-}
-b32 kg_ringbuffer_grow(kg_ringbuffer_t* r, isize n) {
-    b32 out_ok = false;
-    isize old_mem_size = kg_ringbuffer_mem_size(r);
-    isize new_mem_size = old_mem_size + n * r->stride;
-    void* new_real_ptr = kg_allocator_resize(r->allocator, r->real_ptr, new_mem_size, old_mem_size);
-    out_ok = new_real_ptr != null;
-    if (out_ok) {
-        r->cap += n;
-    }
-    return out_ok;
-}
-b32 kg_ringbuffer_ensure_available(kg_ringbuffer_t* r, isize n) {
-    b32 out_ok = true;
-    if (kg_ringbuffer_available(r) < n) {
-        out_ok = kg_ringbuffer_grow(r, n);
-    }
-    return out_ok;
-}
-isize kg_ringbuffer_available(kg_ringbuffer_t* r) {
-    isize out = 0;
-    if (r) {
-        out = r->write - r->read;
-    }
-    return out;
-}
-isize kg_ringbuffer_mem_size(kg_ringbuffer_t* r) {
-    isize out = 0;
-    if (r) {
-        out = r->stride * r->cap;
-    }
-    return out;
-}
-void kg_ringbuffer_destroy(kg_ringbuffer_t* r) {
-    kg_allocator_free(r->allocator, r->real_ptr, kg_ringbuffer_mem_size(r));
-}
-
 b32 kg_queue_create(kg_queue_t* q, kg_allocator_t* allocator, isize stride, isize cap) {
     b32 out_ok = false;
     *q = (kg_queue_t){
@@ -1451,6 +1341,8 @@ void kg_assert_handler(const char* prefix, const char* condition, const char* fi
     kg_exit(1);
 }
 
+#endif // KG_IMPL
+
 #ifdef KG_THREADS
 
 #include <pthread.h>
@@ -1524,6 +1416,8 @@ b32  kg_pool_create  (kg_pool_t* p, kg_allocator_t* a, isize n);
 b32  kg_pool_add_task(kg_pool_t* p, kg_thread_fn_t fn, void* arg);
 b32  kg_pool_join    (kg_pool_t* p);
 void kg_pool_destroy (kg_pool_t* p);
+
+#endif // KG_THREADS
 
 #ifdef KG_THREADS_IMPL
 
@@ -1723,8 +1617,6 @@ void kg_pool_destroy(kg_pool_t* p) {
 
 #endif // KG_THREADS_IMPL
 
-#endif // KG_THREADS
-
 #ifdef KG_FLAGS
 
 void kg_flag_str   (kg_str_t* holder, const char* name, const kg_str_t default_value, const char* usage);
@@ -1733,6 +1625,8 @@ void kg_flag_u64   (u64* holder, const char* name, u64 default_value, const char
 void kg_flag_i64   (i64* holder, const char* name, i64 default_value, const char* usage);
 void kg_flags_parse(i32 argc, char* argv[]);
 void kg_flags_usage(void);
+
+#endif // KG_FLAGS
 
 #ifdef KG_FLAGS_IMPL
 
@@ -1925,10 +1819,6 @@ void kg_flags_usage(void) {
 
 #endif // KG_FLAGS_IMPL
 
-#endif // KG_FLAGS
-
-#endif // KG_IMPL
-
 #ifdef KG_LOGGER
 
 typedef enum kg_log_level_t {
@@ -2078,6 +1968,8 @@ void kgt_expect_handler(const char* cond, const char* msg, const char* file, isi
 #define kgt_expect_cstrn_eq(a, b, s)  kgt_expect(strncmp(a, b, s) == 0, "expected cstrn eq")
 #define kgt_expect_cstrn_neq(a, c, s) kgt_expect(strncmp(a, b, s) != 0, "expected cstrn neq")
 
+#endif // KG_TESTER
+
 #ifdef KG_TESTER_IMPL
 
 void kgt_expect_handler(const char* cond, const char* msg, const char* file, isize line) {
@@ -2105,5 +1997,3 @@ void kgt_destroy(kgt_t* t) {
 }
 
 #endif // KG_TESTER_IMPL
-
-#endif // KG_TESTER
