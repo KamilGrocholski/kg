@@ -1269,7 +1269,7 @@ kg_duration_t kg_duration_since(kg_time_t t) {
     };
     return out;
 }
-i64 kg_duration_milliseconds(kg_duration_t d) {
+i64 kg_duration_to_milliseconds(kg_duration_t d) {
     return d.milliseconds;
 }
 
@@ -1360,66 +1360,41 @@ void kg_cond_destroy  (kg_cond_t* c);
 
 typedef struct kg_thread_t kg_thread_t;
 
-typedef isize (*kg_thread_fn_t)(kg_thread_t* t);
+typedef void* (*kg_thread_fn_t)(void* arg);
 
 typedef struct kg_thread_t {
     pthread_t posix_handle;
 
-    kg_thread_fn_t fn;
-    void*          user_data;
-    isize          retval;
     isize          stack_size;
-    kg_sema_t      sema;
     b32 volatile   is_running;
 } kg_thread_t;
 
-b32  kg_thread_create (kg_thread_t* t);
-b32  kg_thread_run    (kg_thread_t* t, kg_thread_fn_t fn, void* user_data);
+b32  kg_thread_create (kg_thread_t* t, kg_thread_fn_t fn, void* user_data);
 b32  kg_thread_wait   (kg_thread_t* t);
+b32  kg_thread_detach (kg_thread_t* t);
+i32  kg_thread_id     (void);
 void kg_thread_destroy(kg_thread_t* t);
 
-typedef struct kg_worker_t {
-    kg_allocator_t* allocator;
-    kg_thread_t     thread;
-    kg_queue_t      work_queue;
-    kg_mutex_t      work_queue_mutex;
-} kg_worker_t;
-
-typedef struct kg_task_t kg_task_t;
-
-typedef void (*kg_task_fn_t)(void* arg);
-
 typedef struct kg_task_t {
-    kg_task_fn_t fn;
-    void*        arg;
-} kg_task_t;
-
-typedef struct kg_worker_work_t {
     kg_thread_fn_t fn;
     void*          arg;
-} kg_worker_work_t;
-
-b32  kg_worker_create (kg_worker_t* w, kg_allocator_t* a);
-b32  kg_worker_run    (kg_worker_t* w);
-b32  kg_worker_add    (kg_worker_t* w, kg_thread_fn_t fn, void* arg);
-b32  kg_worker_wait   (kg_worker_t* w);
-void kg_worker_destroy(kg_worker_t* w);
+} kg_task_t;
 
 typedef struct kg_pool_t {
     kg_allocator_t* allocator;
     kg_queue_t      task_queue;
-    kg_mutex_t      mutex;
-    kg_cond_t       cond;
-    kg_worker_t*    workers;
+    kg_mutex_t      work_mutex;
+    kg_cond_t       work_cond;
+    kg_cond_t       working_cond;
+    kg_thread_t*    workers;
+    isize           working_count;
     isize           workers_n;
-    b32             is_running;
+    b32             stop;
 } kg_pool_t;
 
 b32  kg_pool_create  (kg_pool_t* p, kg_allocator_t* a, isize n);
-b32  kg_pool_add_task(kg_pool_t* p, kg_task_fn_t fn, void* arg);
+b32  kg_pool_add_task(kg_pool_t* p, kg_thread_fn_t fn, void* arg);
 b32  kg_pool_wait    (kg_pool_t* p);
-b32  kg_pool_finish  (kg_pool_t* p);
-b32  kg_pool_run     (kg_pool_t* p);
 void kg_pool_destroy (kg_pool_t* p);
 
 #ifdef KG_THREADS_IMPL
@@ -1497,30 +1472,14 @@ void kg_cond_destroy(kg_cond_t* c) {
     pthread_cond_destroy(&c->pthread_cond);
 }
 
-void* kg_thread_posix_fn_(void* arg) {
-    kg_thread_t* t = kg_cast(kg_thread_t*)arg;
-    kg_sema_post(&t->sema, 1);
-    t->retval = t->fn(t);
-    t->is_running = false;
-    return null;
-}
-b32 kg_thread_create(kg_thread_t* t) {
-    b32 out_ok = true;
-    *t = (kg_thread_t){0};
-    out_ok = kg_sema_create(&t->sema);
-    return out_ok;
-}
-b32 kg_thread_run(kg_thread_t* t, kg_thread_fn_t fn, void* user_data) {
+b32 kg_thread_create(kg_thread_t* t, kg_thread_fn_t fn, void* arg) {
     b32 out_ok = false;
-    t->fn = fn;
-    t->user_data = user_data;
     t->is_running = true;
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-    out_ok = pthread_create(&t->posix_handle, &attr, kg_thread_posix_fn_, t) == 0;
+    out_ok = pthread_create(&t->posix_handle, &attr, fn, arg) == 0;
     pthread_attr_destroy(&attr);
-    kg_sema_wait(&t->sema);
     return out_ok;
 }
 b32 kg_thread_wait(kg_thread_t* t) {
@@ -1532,154 +1491,103 @@ b32 kg_thread_wait(kg_thread_t* t) {
     }
     return out_ok;
 }
+b32 kg_thread_detach(kg_thread_t* t) {
+    b32 out_ok = false;
+    out_ok = pthread_detach(t->posix_handle) == 0;
+    return out_ok;
+}
+i32 kg_thread_id(void) {
+    return pthread_self();
+}
 void kg_thread_destroy(kg_thread_t* t) {
     if (t->is_running) {
         kg_thread_wait(t);
     }
-    kg_sema_destroy(&t->sema);
 }
 
-b32 kg_worker_create(kg_worker_t* w, kg_allocator_t* a) {
-    b32 out_ok = true;
-    *w = (kg_worker_t){
-        .allocator = a,
-    };
-    out_ok = kg_thread_create(&w->thread);
-    if (out_ok) {
-        out_ok = kg_mutex_create(&w->work_queue_mutex);
-        if (out_ok) {
-            out_ok = kg_queue_create(&w->work_queue, w->allocator, kg_sizeof(kg_worker_work_t), 16);
+void* kg_pool_loop_(void* arg) {
+    kg_pool_t* p = kg_cast(kg_pool_t*)arg;
+    kg_task_t task = {0};
+    while (true) {
+        kg_mutex_lock(&p->work_mutex);
+        while (kg_queue_is_empty(&p->task_queue) && !p->stop) {
+            kg_cond_wait(&p->work_cond, &p->work_mutex);
         }
-    }
-    return out_ok;
-}
-isize kg_worker_loop_(kg_thread_t* t) {
-    isize out_code = 1;
-    kg_worker_t* w = kg_cast(kg_worker_t*)t->user_data;
-    while(true) {
-        kg_mutex_lock(&w->work_queue_mutex);
-        kg_worker_work_t work = (kg_worker_work_t){0};
-        if (!kg_queue_deque(&w->work_queue, &work)) {
-            out_code = 0;
-            kg_mutex_unlock(&w->work_queue_mutex);
+        if (p->stop) {
+            kg_mutex_unlock(&p->work_mutex);
             break;
         }
-        t->user_data = work.arg;
-        kg_mutex_unlock(&w->work_queue_mutex);
-        work.fn(t);
+        b32 has_task = kg_queue_deque(&p->task_queue, &task);
+        p->working_count++;
+        kg_mutex_unlock(&p->work_mutex);
+        if (has_task && task.fn) {
+            task.fn(task.arg);
+        }
+        kg_mutex_lock(&p->work_mutex);
+        p->working_count--;
+        if (!p->stop && p->working_count == 0 && kg_queue_is_empty(&p->task_queue)) {
+            kg_cond_signal(&p->working_cond);
+        }
+        kg_mutex_unlock(&p->work_mutex);
     }
-    t->user_data = w;
-    return out_code;
+    return null;
 }
-b32 kg_worker_run(kg_worker_t* w) {
-    b32 out_ok = true;
-    out_ok = kg_thread_run(&w->thread, kg_worker_loop_, w);
-    return out_ok;
-}
-b32 kg_worker_add(kg_worker_t* w, kg_thread_fn_t fn, void* arg) {
-    b32 out_ok = true;
-    kg_mutex_lock(&w->work_queue_mutex);
-    kg_worker_work_t work = (kg_worker_work_t){
-        .fn  = fn,
-        .arg = arg,
-    };
-    out_ok = kg_queue_enqueue(&w->work_queue, &work);
-    kg_mutex_unlock(&w->work_queue_mutex);
-    return out_ok;
-}
-b32 kg_worker_wait(kg_worker_t* w) {
-    b32 out_ok = true;
-    out_ok = kg_thread_wait(&w->thread);
-    return out_ok;
-}
-void kg_worker_destroy(kg_worker_t* w) {
-    kg_thread_destroy(&w->thread);
-    kg_queue_destroy(&w->work_queue);
-    kg_mutex_destroy(&w->work_queue_mutex);
-}
-
 b32 kg_pool_create(kg_pool_t* p, kg_allocator_t* a, isize n) {
     static isize initial_queue_cap = 16;
     b32 out_ok = false;
-    kg_pool_t pool = (kg_pool_t){
+    *p = (kg_pool_t){
         .allocator = a,
         .workers_n = n,
     };
-    pool.workers = kg_allocator_alloc_array(pool.allocator, kg_worker_t, pool.workers_n);
-    if (pool.workers) {
-        kg_mutex_create(&pool.mutex);
-        kg_cond_create(&pool.cond);
-        kg_queue_create(&pool.task_queue, pool.allocator, kg_sizeof(kg_task_t), initial_queue_cap);
-        for (isize i = 0; i < pool.workers_n; i++) {
-            kg_worker_create(&pool.workers[i], pool.allocator);
+    p->workers = kg_allocator_alloc_array(p->allocator, kg_thread_t, p->workers_n);
+    if (p->workers) {
+        kg_mutex_create(&p->work_mutex);
+        kg_cond_create(&p->work_cond);
+        kg_cond_create(&p->working_cond);
+        kg_queue_create(&p->task_queue, p->allocator, kg_sizeof(kg_task_t), initial_queue_cap);
+        for (isize i = 0; i < p->workers_n; i++) {
+            kg_thread_create(&p->workers[i], kg_pool_loop_, p);
+            kg_thread_detach(&p->workers[i]);
         }
         out_ok = true;
-        *p = pool;
     }
     return out_ok;
 }
-b32 kg_pool_add_task(kg_pool_t* p, kg_task_fn_t fn, void* arg) {
+b32 kg_pool_add_task(kg_pool_t* p, kg_thread_fn_t fn, void* arg) {
     b32 out_ok = true;
-    kg_mutex_lock(&p->mutex);
+    kg_mutex_lock(&p->work_mutex);
     kg_task_t task = (kg_task_t){
         .fn = fn,
         .arg = arg,
     };
     out_ok = kg_queue_enqueue(&p->task_queue, &task);
-    kg_cond_signal(&p->cond);
-    kg_mutex_unlock(&p->mutex);
+    kg_cond_signal(&p->work_cond);
+    kg_mutex_unlock(&p->work_mutex);
     return out_ok;
 }
 b32 kg_pool_wait(kg_pool_t* p) {
     b32 out_ok = true;
-    kg_mutex_lock(&p->mutex);
-    while(!kg_queue_is_empty(&p->task_queue)) {
-        kg_cond_wait(&p->cond, &p->mutex); 
-    }
-    kg_mutex_unlock(&p->mutex);
-    return out_ok;
-}
-b32 kg_pool_finish(kg_pool_t* p) {
-    kg_cast(void)p;
-    b32 out_ok = true;
-    return out_ok;
-}
-void kg_pool_loop_(void* arg) {
-    kg_pool_t* p = kg_cast(kg_pool_t*)arg;
-    while(true) {
-        kg_mutex_lock(&p->mutex);
-        while(!kg_queue_is_empty(&p->task_queue) && p->is_running) {
-            kg_cond_wait(&p->cond, &p->mutex);
-        }
-        if (!p->is_running) {
-            kg_mutex_unlock(&p->mutex);
+    kg_mutex_lock(&p->work_mutex);
+    while (true) {
+        if (!kg_queue_is_empty(&p->task_queue) || p->working_count > 0) {
+            kg_cond_wait(&p->working_cond, &p->work_mutex);
+        } else {
             break;
         }
-        kg_task_t task = (kg_task_t){0};
-        b32 has_task = kg_queue_deque(&p->task_queue, &task);
-        kg_mutex_unlock(&p->mutex);
-        if (has_task) {
-            task.fn(task.arg);
-        }
     }
-}
-b32 kg_pool_run(kg_pool_t* p) {
-    b32 out_ok = true;
-    p->is_running = true;
-    for (isize i = 0; i < p->workers_n; i++) {
-        kg_worker_run(&p->workers[i]);
-    }
-    kg_pool_loop_(p);
+    kg_mutex_unlock(&p->work_mutex);
     return out_ok;
 }
 void kg_pool_destroy(kg_pool_t* p) {
-    for (isize i = 0; p->workers_n; i++) {
-        kg_worker_destroy(&p->workers[i]);
-    }
-    kg_allocator_free(p->allocator, p->workers, kg_sizeof(kg_worker_t) * p->workers_n);
-    kg_queue_destroy(&p->task_queue);
-    kg_mutex_destroy(&p->mutex);
-    kg_cond_destroy(&p->cond);
+    kg_mutex_lock(&p->work_mutex);
+    p->stop = true;
+    kg_cond_broadcast(&p->work_cond);
+    kg_mutex_unlock(&p->work_mutex);
+    kg_pool_wait(p);
+    kg_mutex_destroy(&p->work_mutex);
+    kg_cond_destroy(&p->work_cond);
+    kg_cond_destroy(&p->working_cond);
+    kg_allocator_free(p->allocator, p->workers, kg_sizeof(kg_thread_t) * p->workers_n);
 }
 
 #endif // KG_THREADS_IMPL

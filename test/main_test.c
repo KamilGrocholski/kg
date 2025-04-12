@@ -120,7 +120,7 @@ void test_str_chop_first_split_by() {
 void test_duration_since() {
     kg_time_t t = kg_time_now();
     kg_duration_t d = kg_duration_since(t);
-    kgt_expect_eq(kg_duration_milliseconds(d), 0);
+    kgt_expect_eq(kg_duration_to_milliseconds(d), 0);
 }
 
 void test_time_date() {
@@ -137,7 +137,7 @@ void test_time_diff() {
     kg_time_t ta = kg_time_now();
     kg_time_t tb = kg_time_add(ta, kg_duration_create(10));
     kg_duration_t dc = kg_time_diff(ta, tb);
-    kgt_expect_true((kg_duration_milliseconds(dc) < 0));
+    kgt_expect_true((kg_duration_to_milliseconds(dc) < 0));
 }
 
 void test_time_math() {
@@ -220,26 +220,34 @@ void test_queue() {
     kgt_expect_null(q.real_ptr);
 }
 
-isize _worker_fn(kg_thread_t* t) {
-    kgt_expect_not_null(t);
-    kgt_expect_not_null(t->user_data);
-    isize* value = kg_cast(isize*)t->user_data;
-    kgt_expect_not_null(value);
-    kgt_expect_eq(*value, 5);
-    return 0;
+typedef struct {
+    kg_mutex_t mutex;
+    isize      value;
+} test_pool_task_st_;
+
+void* test_pool_task_(void* arg) {
+    test_pool_task_st_* st = kg_cast(test_pool_task_st_*)arg;
+    kg_mutex_lock(&st->mutex);
+    st->value += 1;
+    kg_mutex_unlock(&st->mutex);
+    return null;
 }
 
-void test_worker() {
+void test_pool() {
     kg_allocator_t allocator = kg_allocator_default();
-    kg_worker_t wt;
-    kg_worker_create(&wt, &allocator);
-    isize value = 5;
-    kg_worker_add(&wt, _worker_fn, &value);
-    kg_worker_add(&wt, _worker_fn, &value);
-    kg_worker_add(&wt, _worker_fn, &value);
-    kg_worker_run(&wt);
-    kg_worker_wait(&wt);
-    kg_worker_destroy(&wt);
+    kg_pool_t p;
+    isize n = 10;
+    isize iter = 120;
+    test_pool_task_st_ st = (test_pool_task_st_){.value = 0};
+    kg_mutex_create(&st.mutex);
+    kg_pool_create(&p, &allocator, n);
+    for (isize i = 0; i < iter; i++) {
+        kg_pool_add_task(&p, test_pool_task_, &st);
+    }
+    kg_pool_wait(&p);
+    kg_mutex_destroy(&st.mutex);
+    kgt_expect_eq(st.value, iter);
+    kg_pool_destroy(&p);
 }
 
 int main() {
@@ -267,7 +275,7 @@ int main() {
         kgt_register(test_parse),
         kgt_register(test_allocator_temp),
         kgt_register(test_queue),
-        kgt_register(test_worker),
+        kgt_register(test_pool),
     }; 
     isize tests_len = kg_sizeof(tests) / kg_sizeof(kgt_test_t);
 
