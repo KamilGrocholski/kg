@@ -81,8 +81,8 @@ void kg_printf(const char* fmt, ...);
 
 void kg_assert_handler(const char* prefix, const char* condition, const char* file, isize line, const char* fmt, ...);
 
-#define kg_assert_msg(cond, fmt, ...) if (cond) {} else {kg_assert_handler("Assertion failed", #cond, __FILE__, kg_cast(isize)__LINE__, fmt, ##__VA_ARGS__);}
-#define kg_assert(cond)               kg_assert_msg(cond, null)
+#define kg_assert_fmt(cond, fmt, ...) if (cond) {} else {kg_assert_handler("Assertion failed", #cond, __FILE__, kg_cast(isize)__LINE__, fmt, ##__VA_ARGS__);}
+#define kg_assert(cond)               kg_assert_fmt(cond, null)
 #define kg_panic(fmt, ...)            kg_assert_handler("Panic", null, __FILE__, kg_cast(isize)__LINE__, fmt, ##__VA_ARGS__)
 
 void* kg_mem_alloc  (isize size);
@@ -105,9 +105,9 @@ typedef struct kg_arena_t {
 } kg_arena_t;
 
 b32   kg_arena_create   (kg_arena_t* a, kg_allocator_t* allocator, isize max_size);
-isize kg_arena_allocated(kg_arena_t* a);
-isize kg_arena_available(kg_arena_t* a);
-isize kg_arena_mem_size (kg_arena_t* a);
+isize kg_arena_allocated(const kg_arena_t* a);
+isize kg_arena_available(const kg_arena_t* a);
+isize kg_arena_mem_size (const kg_arena_t* a);
 void  kg_arena_reset    (kg_arena_t* a);
 void  kg_arena_destroy  (kg_arena_t* a);
 
@@ -143,7 +143,6 @@ void kg_quicksort(void* src, isize lo, isize hi, isize stride, kg_compare_fn_t c
 typedef struct kg_string_header_t {
     isize           len;
     isize           cap;
-    char*           cstr;
     kg_allocator_t* allocator;
 } kg_string_header_t;
 
@@ -163,13 +162,13 @@ kg_string_t kg_string_append_cstr     (kg_string_t s, const char* cstr);
 kg_string_t kg_string_append_cstr_n   (kg_string_t s, const char* cstr, isize cstr_len);
 kg_string_t kg_string_grow            (kg_string_t s, isize n);
 kg_string_t kg_string_ensure_available(kg_string_t s, isize n);
-isize       kg_string_len             (kg_string_t s);
-isize       kg_string_cap             (kg_string_t s);
-isize       kg_string_available       (kg_string_t s);
-isize       kg_string_mem_size        (kg_string_t s);
-b32         kg_string_is_valid        (kg_string_t s);
-b32         kg_string_is_equal        (kg_string_t s, kg_string_t other);
-b32         kg_string_is_empty        (kg_string_t s);
+isize       kg_string_len             (const kg_string_t s);
+isize       kg_string_cap             (const kg_string_t s);
+isize       kg_string_available       (const kg_string_t s);
+isize       kg_string_mem_size        (const kg_string_t s);
+b32         kg_string_is_valid        (const kg_string_t s);
+b32         kg_string_is_equal        (const kg_string_t s, const kg_string_t other);
+b32         kg_string_is_empty        (const kg_string_t s);
 void        kg_string_destroy         (kg_string_t s);
 
 typedef struct kg_str_t {
@@ -256,14 +255,16 @@ typedef struct kg_queue_t {
 } kg_queue_t;
 
 b32    kg_queue_create          (kg_queue_t* q, kg_allocator_t* allocator, isize stride, isize cap);
-b32    kg_queue_peek            (kg_queue_t* q, void* o);
-b32    kg_queue_enqueue         (kg_queue_t* q, void* o);
+b32    kg_queue_peek            (const kg_queue_t* q, void* o);
+b32    kg_queue_enqueue         (kg_queue_t* q, const void* o);
 b32    kg_queue_deque           (kg_queue_t* q, void* o);
 b32    kg_queue_grow            (kg_queue_t* q, isize n);
 b32    kg_queue_ensure_available(kg_queue_t* q, isize n);
-b32    kg_queue_is_empty        (kg_queue_t* q);
-isize  kg_queue_available       (kg_queue_t* q);
-isize  kg_queue_mem_size        (kg_queue_t* q);
+b32    kg_queue_is_empty        (const kg_queue_t* q);
+isize  kg_queue_available       (const kg_queue_t* q);
+isize  kg_queue_len             (const kg_queue_t* q);
+isize  kg_queue_cap             (const kg_queue_t* q);
+isize  kg_queue_mem_size        (const kg_queue_t* q);
 void   kg_queue_destroy         (kg_queue_t* q);
 
 typedef enum kg_file_mode_t {
@@ -338,24 +339,24 @@ const u64 KG_HOUR        = 60 * KG_MINUTE;
 
 void          kg_time_sleep      (u64 nanoseconds);
 kg_time_t     kg_time_now        (void);
-kg_time_t     kg_time_add        (kg_time_t t, kg_duration_t d);
-kg_time_t     kg_time_sub        (kg_time_t t, kg_duration_t d);
-b32           kg_time_is_equal   (kg_time_t t, kg_time_t o);
-b32           kg_time_is_after   (kg_time_t t, kg_time_t o);
-b32           kg_time_is_before  (kg_time_t t, kg_time_t o);
-kg_duration_t kg_time_diff       (kg_time_t t, kg_time_t other);
-kg_date_t     kg_time_to_date    (kg_time_t t);
-kg_datetime_t kg_time_to_datetime(kg_time_t t);
-i32           kg_time_to_year    (kg_time_t t);
-kg_month_t    kg_time_to_month   (kg_time_t t);
-i32           kg_time_to_day     (kg_time_t t);
+kg_time_t     kg_time_add        (const kg_time_t t, const kg_duration_t d);
+kg_time_t     kg_time_sub        (const kg_time_t t, const kg_duration_t d);
+b32           kg_time_is_equal   (const kg_time_t t, const kg_time_t o);
+b32           kg_time_is_after   (const kg_time_t t, const kg_time_t o);
+b32           kg_time_is_before  (const kg_time_t t, const kg_time_t o);
+kg_duration_t kg_time_diff       (const kg_time_t t, const kg_time_t other);
+kg_date_t     kg_time_to_date    (const kg_time_t t);
+kg_datetime_t kg_time_to_datetime(const kg_time_t t);
+i32           kg_time_to_year    (const kg_time_t t);
+kg_month_t    kg_time_to_month   (const kg_time_t t);
+i32           kg_time_to_day     (const kg_time_t t);
 
 kg_duration_t kg_duration_create         (i64 milliseconds);
-kg_duration_t kg_duration_since          (kg_time_t t);
-i64           kg_duration_to_milliseconds(kg_duration_t d);
+kg_duration_t kg_duration_since          (const kg_time_t t);
+i64           kg_duration_to_milliseconds(const kg_duration_t d);
 
-kg_string_t kg_date_to_string    (kg_allocator_t* a, kg_date_t d);
-kg_string_t kg_datetime_to_string(kg_allocator_t* a, kg_datetime_t d);
+kg_string_t kg_date_to_string    (kg_allocator_t* a, const kg_date_t d);
+kg_string_t kg_datetime_to_string(kg_allocator_t* a, const kg_datetime_t d);
 
 f64 kg_math_pow(f64 base, f64 exponent);
 
@@ -469,17 +470,17 @@ void* kg_arena_alloc(kg_arena_t* a, isize size) {
     }
     return out;
 }
-isize kg_arena_allocated(kg_arena_t* a) {
+kg_inline isize kg_arena_allocated(const kg_arena_t* a) {
     return a ? a->allocated_size : 0;
 }
-isize kg_arena_available(kg_arena_t* a) {
+kg_inline isize kg_arena_available(const kg_arena_t* a) {
     isize out = 0;
     if (a && a->max_size > a->allocated_size) {
         out = a->max_size - a->allocated_size;
     }
     return out;
 }
-isize kg_arena_mem_size(kg_arena_t* a) {
+kg_inline isize kg_arena_mem_size(const kg_arena_t* a) {
     return a ? a->max_size : 0;
 }
 void kg_arena_reset(kg_arena_t* a) {
@@ -693,7 +694,7 @@ kg_string_t kg_string_grow(kg_string_t s, isize n) {
     }
     return out_string;
 }
-isize kg_string_len(kg_string_t s) {
+kg_inline isize kg_string_len(const kg_string_t s) {
     isize out_len = 0;
     if (s) {
         kg_string_header_t* h = kg_string_header(s);
@@ -701,7 +702,7 @@ isize kg_string_len(kg_string_t s) {
     }
     return out_len;
 }
-isize kg_string_cap(kg_string_t s) {
+kg_inline isize kg_string_cap(const kg_string_t s) {
     isize out_cap = 0;
     if (s) {
         kg_string_header_t* h = kg_string_header(s);
@@ -709,7 +710,7 @@ isize kg_string_cap(kg_string_t s) {
     }
     return out_cap;
 }
-isize kg_string_available(kg_string_t s) {
+kg_inline isize kg_string_available(const kg_string_t s) {
     isize out_available = 0;
     if (s) {
         kg_string_header_t* h = kg_string_header(s);
@@ -719,7 +720,7 @@ isize kg_string_available(kg_string_t s) {
     }
     return out_available;
 }
-kg_string_t kg_string_ensure_available(kg_string_t s, isize n) {
+kg_inline kg_string_t kg_string_ensure_available(kg_string_t s, isize n) {
     kg_string_t out_string = null;
     if (s) {
         isize available = kg_string_available(s);
@@ -731,7 +732,7 @@ kg_string_t kg_string_ensure_available(kg_string_t s, isize n) {
     }
     return out_string;
 }
-isize kg_string_mem_size(kg_string_t s) {
+kg_inline isize kg_string_mem_size(const kg_string_t s) {
     isize out_mem_size = 0;
     if (s) {
         kg_string_header_t* h = kg_string_header(s);
@@ -739,7 +740,7 @@ isize kg_string_mem_size(kg_string_t s) {
     }
     return out_mem_size;
 }
-b32 kg_string_is_valid(kg_string_t s) {
+kg_inline b32 kg_string_is_valid(const kg_string_t s) {
     b32 out_ok = false;
     if (s) {
         kg_string_header_t* h = kg_string_header(s);
@@ -747,7 +748,7 @@ b32 kg_string_is_valid(kg_string_t s) {
     }
     return out_ok;
 }
-b32 kg_string_is_equal(kg_string_t s, kg_string_t other) {
+kg_inline b32 kg_string_is_equal(const kg_string_t s, const kg_string_t other) {
     b32 out_ok = false;
     if (s && other) {
         kg_str_t s_str = (kg_str_t){.len = kg_string_len(s), .ptr = s};
@@ -756,7 +757,7 @@ b32 kg_string_is_equal(kg_string_t s, kg_string_t other) {
     }
     return out_ok;
 }
-kg_inline b32 kg_string_is_empty(kg_string_t s) {
+kg_inline b32 kg_string_is_empty(const kg_string_t s) {
     return kg_string_len(s) == 0;
 }
 void kg_string_destroy(kg_string_t s) {
@@ -1057,7 +1058,7 @@ b32 kg_queue_create(kg_queue_t* q, kg_allocator_t* allocator, isize stride, isiz
     }
     return out_ok;
 }
-b32 kg_queue_peek(kg_queue_t* q, void* o) {
+b32 kg_queue_peek(const kg_queue_t* q, void* o) {
     b32 out_ok = false;
     if (q->len > 0) {
         kg_mem_copy(o, q->real_ptr, q->stride);
@@ -1065,7 +1066,7 @@ b32 kg_queue_peek(kg_queue_t* q, void* o) {
     }
     return out_ok;
 }
-b32 kg_queue_enqueue(kg_queue_t* q, void* o) {
+b32 kg_queue_enqueue(kg_queue_t* q, const void* o) {
     b32 out_ok = false;
     if (kg_queue_ensure_available(q, 1)) {
         if (kg_mem_copy(kg_cast(u8*)q->real_ptr + (q->len * q->stride), o, q->stride) != null) {
@@ -1100,24 +1101,30 @@ b32 kg_queue_grow(kg_queue_t* q, isize n) {
     }
     return out_ok;
 }
-b32 kg_queue_ensure_available(kg_queue_t* q, isize n) {
+kg_inline b32 kg_queue_ensure_available(kg_queue_t* q, isize n) {
     b32 out_ok = true;
     if (kg_queue_available(q) < n) {
         out_ok = kg_queue_grow(q, n);
     }
     return out_ok;
 }
-b32 kg_queue_is_empty(kg_queue_t* q) {
+kg_inline b32 kg_queue_is_empty(const kg_queue_t* q) {
     return q ? q->len <= 0 : true;
 }
-isize kg_queue_available(kg_queue_t* q) {
+kg_inline isize kg_queue_available(const kg_queue_t* q) {
     isize out = 0;
     if (q && q->cap > q->len) {
         out = q->cap - q->len;
     }
     return out;
 }
-isize kg_queue_mem_size(kg_queue_t* q) {
+kg_inline isize kg_queue_len(const kg_queue_t* q) {
+    return q ? q->len : 0;
+}
+kg_inline isize kg_queue_cap(const kg_queue_t* q) {
+    return q ? q->cap : 0;
+}
+kg_inline isize kg_queue_mem_size(const kg_queue_t* q) {
     isize out = 0;
     if (q) {
         out = q->cap * q->stride;
@@ -1225,30 +1232,30 @@ kg_time_t kg_time_now(void) {
     };
     return out;
 }
-kg_time_t kg_time_add(kg_time_t t, kg_duration_t d) {
+kg_inline kg_time_t kg_time_add(const kg_time_t t, const kg_duration_t d) {
     kg_time_t out_time = (kg_time_t){.milliseconds = t.milliseconds + d.milliseconds};
     return out_time;
 }
-kg_time_t kg_time_sub(kg_time_t t, kg_duration_t d) {
+kg_inline kg_time_t kg_time_sub(const kg_time_t t, const kg_duration_t d) {
     kg_time_t out_time = (kg_time_t){.milliseconds = t.milliseconds - d.milliseconds};
     return out_time;
 }
-b32 kg_time_is_equal(kg_time_t t, kg_time_t o) {
+kg_inline b32 kg_time_is_equal(const kg_time_t t, const kg_time_t o) {
     return t.milliseconds == o.milliseconds;
 }
-b32 kg_time_is_after(kg_time_t t, kg_time_t o) {
+kg_inline b32 kg_time_is_after(const kg_time_t t, const kg_time_t o) {
     return t.milliseconds > o.milliseconds;
 }
-b32 kg_time_is_before(kg_time_t t, kg_time_t o) {
+kg_inline b32 kg_time_is_before(const kg_time_t t, const kg_time_t o) {
     return t.milliseconds < o.milliseconds;
 }
-kg_duration_t kg_time_diff(kg_time_t t, kg_time_t other) {
+kg_inline kg_duration_t kg_time_diff(const kg_time_t t, const kg_time_t other) {
     kg_duration_t out = { 
         .milliseconds = t.milliseconds - other.milliseconds,
     };
     return out;
 }
-kg_date_t kg_time_to_date(kg_time_t t) {
+kg_inline kg_date_t kg_time_to_date(const kg_time_t t) {
     i64 seconds = t.milliseconds / 1000;
     struct tm *lt = localtime(&seconds);
     kg_date_t out = {
@@ -1258,7 +1265,7 @@ kg_date_t kg_time_to_date(kg_time_t t) {
     };
     return out;
 }
-kg_datetime_t kg_time_to_datetime(kg_time_t t) {
+kg_inline kg_datetime_t kg_time_to_datetime(const kg_time_t t) {
     i64 seconds = t.milliseconds / 1000;
     struct tm *lt = localtime(&seconds);
     kg_datetime_t out = {
@@ -1271,34 +1278,34 @@ kg_datetime_t kg_time_to_datetime(kg_time_t t) {
     };
     return out;
 }
-i32 kg_time_to_year(kg_time_t t) {
+kg_inline i32 kg_time_to_year(const kg_time_t t) {
     i64 seconds = t.milliseconds / 1000;
     struct tm *lt = localtime(&seconds);
     return lt->tm_year + 1900;
 }
-kg_month_t kg_time_to_month(kg_time_t t) {
+kg_inline kg_month_t kg_time_to_month(const kg_time_t t) {
     i64 seconds = t.milliseconds / 1000;
     struct tm *lt = localtime(&seconds);
     return lt->tm_mon + 1;
 }
-i32 kg_time_to_day(kg_time_t t) {
+kg_inline i32 kg_time_to_day(const kg_time_t t) {
     i64 seconds = t.milliseconds / 1000;
     struct tm *lt = localtime(&seconds);
     return lt->tm_mday;
 }
-kg_duration_t kg_duration_create(i64 milliseconds) {
+kg_inline kg_duration_t kg_duration_create(i64 milliseconds) {
     return (kg_duration_t){milliseconds};
 }
-kg_duration_t kg_duration_since(kg_time_t t) {
+kg_inline kg_duration_t kg_duration_since(const kg_time_t t) {
     kg_duration_t out = { 
         .milliseconds = kg_time_now().milliseconds - t.milliseconds,
     };
     return out;
 }
-i64 kg_duration_to_milliseconds(kg_duration_t d) {
+kg_inline i64 kg_duration_to_milliseconds(const kg_duration_t d) {
     return d.milliseconds;
 }
-kg_string_t kg_date_to_string(kg_allocator_t* a, kg_date_t d) {
+kg_string_t kg_date_to_string(kg_allocator_t* a, const kg_date_t d) {
     kg_string_t out = null;
     char buf[kg_sizeof(kg_datetime_t) * 4] = {0};
     i32 result = sprintf(buf, "%d-%02d-%02d", d.year, d.month, d.day);
@@ -1307,7 +1314,7 @@ kg_string_t kg_date_to_string(kg_allocator_t* a, kg_date_t d) {
     }
     return out;
 }
-kg_string_t kg_datetime_to_string(kg_allocator_t* a, kg_datetime_t d) {
+kg_string_t kg_datetime_to_string(kg_allocator_t* a, const kg_datetime_t d) {
     kg_string_t out = null;
     char buf[kg_sizeof(kg_datetime_t) * 8] = {0};
     i32 result = sprintf(buf, "%d-%02d-%02d %02d:%02d:%02d", d.year, d.month, d.day, d.hour, d.minute, d.second);
@@ -1822,15 +1829,17 @@ void kg_flags_usage(void) {
 #ifdef KG_LOGGER
 
 typedef enum kg_log_level_t {
-    KG_LOG_LEVEL_TRACE = 0,
-    KG_LOG_LEVEL_DEBUG = 1,
-    KG_LOG_LEVEL_INFO  = 2,
-    KG_LOG_LEVEL_WARN  = 3,
-    KG_LOG_LEVEL_ERROR = 4,
-    KG_LOG_LEVEL_FATAL = 5,
+    KG_LOG_LEVEL_RAW   = 0,
+    KG_LOG_LEVEL_TRACE = 1,
+    KG_LOG_LEVEL_DEBUG = 2,
+    KG_LOG_LEVEL_INFO  = 3,
+    KG_LOG_LEVEL_WARN  = 4,
+    KG_LOG_LEVEL_ERROR = 5,
+    KG_LOG_LEVEL_FATAL = 6,
     KG_LOG_LEVEL__SENTINEL,
 } kg_log_level_t;
 
+#define KG_LOG_RAW   1
 #define KG_LOG_TRACE 1
 #define KG_LOG_DEBUG 1
 #define KG_LOG_INFO  1
@@ -1843,11 +1852,17 @@ typedef struct kg_logger_internals_t {
 #ifdef KG_THREADS
     kg_mutex_t mutex;
 #endif
+    isize _;
 } kg_logger_internals_t;
 
 void kg_logger_create(void);
 void kg_log_handler  (kg_log_level_t level, const char* file, i64 line, const char* fmt, ...);
 
+#if KG_LOG_NONE != 1 && KG_LOG_RAW == 1
+    #define kg_log(fmt, ...) kg_log_handler(KG_LOG_LEVEL_RAW, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
+#else   
+    #define kg_log(fmt, ...)
+#endif
 #if KG_LOG_NONE != 1 && KG_LOG_TRACE == 1
     #define kg_log_trace(fmt, ...) kg_log_handler(KG_LOG_LEVEL_TRACE, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
 #else   
@@ -1881,7 +1896,9 @@ void kg_log_handler  (kg_log_level_t level, const char* file, i64 line, const ch
 
 #ifdef KG_LOGGER_IMPL
 
+#ifdef KG_THREADS
 static kg_logger_internals_t kg_logger_internals;
+#endif
 void kg_logger_create(void) {
 #ifdef KG_THREADS
     kg_mutex_create(&kg_logger_internals.mutex);
@@ -1894,6 +1911,7 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
     kg_cast(void)file;
     kg_cast(void)line;
     static const char* level_cstrs[KG_LOG_LEVEL__SENTINEL] = {
+        [KG_LOG_LEVEL_RAW]   = "",
         [KG_LOG_LEVEL_TRACE] = "[trace]",
         [KG_LOG_LEVEL_DEBUG] = "[debug]",
         [KG_LOG_LEVEL_INFO]  = "[info ]",
@@ -1902,10 +1920,19 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
         [KG_LOG_LEVEL_FATAL] = "[fatal]",
     };
     kg_allocator_t allocator = kg_allocator_default();
-    kg_time_t time = kg_time_now();
-    kg_datetime_t datetime = kg_time_to_datetime(time);
-    kg_string_t datetime_string = kg_datetime_to_string(&allocator, datetime);
-    kg_string_t string = kg_string_from_fmt(&allocator, "%s %s ", datetime_string, level_cstrs[level]);
+    kg_string_t string;
+    if (level == KG_LOG_LEVEL_RAW) {
+        string = kg_string_create(&allocator, 128);
+    } else {
+        kg_time_t time = kg_time_now();
+        kg_datetime_t datetime = kg_time_to_datetime(time);
+        kg_string_t datetime_string = kg_datetime_to_string(&allocator, datetime);
+        string = kg_string_from_fmt(&allocator, "%s %s ", datetime_string, level_cstrs[level]);
+        if (datetime_string) {
+            kg_string_destroy(datetime_string);
+            datetime_string = null;
+        }
+    }
     if (string) {
         va_list args;
         va_start(args, fmt);
@@ -1916,10 +1943,6 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
         kg_printf("%s\n", string);
         kg_string_destroy(string);
         string = null;
-    }
-    if (datetime_string) {
-        kg_string_destroy(datetime_string);
-        datetime_string = null;
     }
 #ifdef KG_THREADS
     kg_mutex_unlock(&kg_logger_internals.mutex);
@@ -1932,6 +1955,82 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
 #endif // KG_LOGGER_IMPL
 
 #endif // LG_LOGGER
+
+#ifdef KG_FORMATTER
+
+typedef i32 (*kg_fmt_fn_t)(const char* fmt, va_list args);
+
+void kg_fmt_register(const char* name, kg_fmt_fn_t fn);
+
+void kg_fmt(const char* fmt, ...);
+
+#endif // KG_FORMATTER
+
+#ifdef KG_FORMATTER_IMPL
+
+typedef struct kg_formatter_entry_t {
+    const char* name;
+    kg_fmt_fn_t fn;
+} kg_formatter_entry_t;
+
+#define KG_FORMATTER_ENTRIES_CAP 128
+static isize                kg_formatter_entries_len = 0;
+static kg_formatter_entry_t kg_formatter_entries[KG_FORMATTER_ENTRIES_CAP];
+
+static kg_fmt_fn_t kg_formatter_find(const char* name) {
+    kg_fmt_fn_t out = null;
+    for (isize i = 0; i < kg_formatter_entries_len; i++) {
+        kg_formatter_entry_t entry = kg_formatter_entries[i];
+        if (strcmp(entry.name, name) == 0) {
+            out = entry.fn;
+        }
+    }
+    return out;
+}
+
+void kg_fmt_register(const char* name, kg_fmt_fn_t fn) {
+    kg_assert(kg_formatter_entries_len < KG_FORMATTER_ENTRIES_CAP);
+    kg_formatter_entries[kg_formatter_entries_len++] = (kg_formatter_entry_t){
+        .name = name,
+        .fn   = fn,
+    };
+}
+
+static void kg_read_rp_name(char buf[256], const char* ptr) {
+    isize i = 0;
+    while(*ptr != '}') {
+        buf[i++] = *ptr;
+        ptr++;
+    }
+    buf[i] = '\0';
+}
+
+void kg_fmt(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    char buf[256] = {0};
+    while (*fmt) {
+        if (*fmt == '{') {
+            fmt++;
+            kg_read_rp_name(buf, fmt);
+            while (*fmt && *fmt != '}') fmt++;
+            if (*fmt == '}') fmt++;
+            kg_fmt_fn_t fn = kg_formatter_find(buf);
+            if (fn) {
+                fn(fmt, args);
+            } else {
+                fprintf(stderr, "Formatter not found for: %s\n", buf);
+            }
+            kg_mem_zero(buf, 256);
+        } else {
+            putchar(*fmt++);
+        }
+    }
+
+    va_end(args);
+}
+
+#endif // KG_FORMATTER_IMPL
 
 #ifdef KG_TESTER
 
