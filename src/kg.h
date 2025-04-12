@@ -55,6 +55,13 @@ typedef ptrdiff_t isize;
 #define false 0
 #define null  NULL
 
+#define kg_bit(x) (1<<(x))
+
+#define kg_mask_set(var, set, mask) do { \
+    if (set) (var) |=  (mask); \
+    else     (var) &= ~(mask); \
+} while(0)
+
 #define kg_cast(T)       (T)
 #define kg_sizeof(T)     kg_cast(isize)sizeof(T)
 #define kg_static_assert static_assert
@@ -77,25 +84,6 @@ void kg_assert_handler(const char* prefix, const char* condition, const char* fi
 #define kg_assert_msg(cond, fmt, ...) if (cond) {} else {kg_assert_handler("Assertion failed", #cond, __FILE__, kg_cast(isize)__LINE__, fmt, ##__VA_ARGS__);}
 #define kg_assert(cond)               kg_assert_msg(cond, null)
 #define kg_panic(fmt, ...)            kg_assert_handler("Panic", null, __FILE__, kg_cast(isize)__LINE__, fmt, ##__VA_ARGS__)
-
-typedef enum kg_log_level_t {
-    KG_LOG_LEVEL_TRACE = 0,
-    KG_LOG_LEVEL_DEBUG = 1,
-    KG_LOG_LEVEL_INFO  = 2,
-    KG_LOG_LEVEL_WARN  = 3,
-    KG_LOG_LEVEL_ERROR = 4,
-    KG_LOG_LEVEL_FATAL = 5,
-    KG_LOG_LEVEL__SENTINEL,
-} kg_log_level_t;
-
-void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char* fmt, ...);
-
-#define kg_log_trace(fmt, ...) kg_log_handler(KG_LOG_LEVEL_TRACE, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
-#define kg_log_debug(fmt, ...) kg_log_handler(KG_LOG_LEVEL_DEBUG, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
-#define kg_log_info(fmt, ...)  kg_log_handler(KG_LOG_LEVEL_INFO,  __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
-#define kg_log_warn(fmt, ...)  kg_log_handler(KG_LOG_LEVEL_WARN,  __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
-#define kg_log_error(fmt, ...) kg_log_handler(KG_LOG_LEVEL_ERROR, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
-#define kg_log_fatal(fmt, ...) kg_log_handler(KG_LOG_LEVEL_FATAL, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
 
 void* kg_mem_alloc  (isize size);
 void* kg_mem_resize (void* ptr, isize size);
@@ -148,6 +136,10 @@ typedef struct kg_allocator_t {
     void* context;
 } kg_allocator_t;
 
+typedef i32 (*kg_compare_fn_t)(const void* a, const void* b, isize size);
+
+void kg_quicksort(void* src, isize lo, isize hi, isize stride, kg_compare_fn_t compare_fn);
+
 typedef struct kg_string_header_t {
     isize           len;
     isize           cap;
@@ -177,6 +169,7 @@ isize       kg_string_available       (kg_string_t s);
 isize       kg_string_mem_size        (kg_string_t s);
 b32         kg_string_is_valid        (kg_string_t s);
 b32         kg_string_is_equal        (kg_string_t s, kg_string_t other);
+b32         kg_string_is_empty        (kg_string_t s);
 void        kg_string_destroy         (kg_string_t s);
 
 typedef struct kg_str_t {
@@ -193,6 +186,11 @@ kg_str_t kg_str_from_string        (const kg_string_t s);
 kg_str_t kg_str_from_string_n      (const kg_string_t s, isize len);
 kg_str_t kg_str_chop_first_split_by(kg_str_t* s, const kg_str_t split_by);
 kg_str_t kg_str_substr             (const kg_str_t s, isize start_inc, isize end_exc);
+kg_str_t kg_str_substr_from        (const kg_str_t s, isize start_inc);
+kg_str_t kg_str_substr_to          (const kg_str_t s, isize end_exc);
+kg_str_t kg_str_trim_space         (const kg_str_t s);
+kg_str_t kg_str_trim_prefix        (const kg_str_t s, const kg_str_t prefix);
+kg_str_t kg_str_trim_suffix        (const kg_str_t s, const kg_str_t suffix);
 b32      kg_str_is_empty           (const kg_str_t s);
 b32      kg_str_is_null            (const kg_str_t s);
 b32      kg_str_is_null_or_empty   (const kg_str_t s);
@@ -201,8 +199,6 @@ b32      kg_str_is_equal           (const kg_str_t s, const kg_str_t other);
 b32      kg_str_contains           (const kg_str_t s, const kg_str_t needle);
 b32      kg_str_has_prefix         (const kg_str_t s, const kg_str_t prefix);
 b32      kg_str_has_suffix         (const kg_str_t s, const kg_str_t suffix);
-b32      kg_str_cut_prefix         (kg_str_t* s, const kg_str_t prefix);
-b32      kg_str_cut_suffix         (kg_str_t* s, const kg_str_t suffix);
 isize    kg_str_index              (const kg_str_t s, const kg_str_t needle);
 isize    kg_str_index_char         (const kg_str_t s, char needle);
 
@@ -210,9 +206,13 @@ b32 kg_str_to_b32(b32* b, const kg_str_t s);
 b32 kg_str_to_u64(u64* u, const kg_str_t s);
 b32 kg_str_to_i64(i64* i, const kg_str_t s);
 
-kg_str_t kg_b32_to_str(b32 b);
-kg_str_t kg_u64_to_str(u64 u);
-kg_str_t kg_i64_to_str(u64 i);
+kg_string_t kg_b32_to_string(kg_allocator_t* a, b32 b);
+kg_string_t kg_u64_to_string(kg_allocator_t* a, u64 u);
+kg_string_t kg_i64_to_string(kg_allocator_t* a, u64 i);
+
+char kg_char_to_lower(char c);
+char kg_char_to_upper(char c);
+b32  kg_char_is_space(char c);
 
 typedef struct kg_darray_header_t {
     isize           len;
@@ -242,7 +242,10 @@ void*   kg_darray_grow_                  (void* d, isize n);
     } \
 } while(0)
 #define kg_darray_mem_size(d)            (kg_sizeof(kg_darray_header_t) + kg_darray_cap(d) * kg_darray_stride(d))
-#define kg_darray_destroy(d)             do { kg_darray_header_t* h = kg_darray_header(d); kg_allocator_free(h->allocator, h, kg_darray_mem_size(d)); } while(0)
+#define kg_darray_destroy(d)             do { \
+    kg_darray_header_t* h = kg_darray_header(d); \
+    kg_allocator_free(h->allocator, h, kg_darray_mem_size(d)); \
+} while(0)
 
 typedef struct kg_ringbuffer_t {
     kg_allocator_t* allocator;
@@ -338,6 +341,15 @@ typedef struct kg_date_t {
     i32        day;
 } kg_date_t;
 
+typedef struct kg_datetime_t {
+    i32        year;
+    kg_month_t month;
+    u8         day;
+    u8         hour;
+    u8         minute;
+    u8         second;
+} kg_datetime_t;
+
 const u64 KG_NANOSECOND  = 1;
 const u64 KG_MICROSECOND = 1000 * KG_NANOSECOND;
 const u64 KG_MILLISECOND = 1000 * KG_MICROSECOND;
@@ -345,22 +357,26 @@ const u64 KG_SECOND      = 1000 * KG_MILLISECOND;
 const u64 KG_MINUTE      = 60 * KG_SECOND;
 const u64 KG_HOUR        = 60 * KG_MINUTE;
 
-void          kg_time_sleep    (u64 nanoseconds);
-kg_time_t     kg_time_now      (void);
-kg_time_t     kg_time_add      (kg_time_t t, kg_duration_t d);
-kg_time_t     kg_time_sub      (kg_time_t t, kg_duration_t d);
-b32           kg_time_is_equal (kg_time_t t, kg_time_t o);
-b32           kg_time_is_after (kg_time_t t, kg_time_t o);
-b32           kg_time_is_before(kg_time_t t, kg_time_t o);
-kg_duration_t kg_time_diff     (kg_time_t t, kg_time_t other);
-kg_date_t     kg_time_to_date  (kg_time_t t);
-i32           kg_time_to_year  (kg_time_t t);
-kg_month_t    kg_time_to_month (kg_time_t t);
-i32           kg_time_to_day   (kg_time_t t);
+void          kg_time_sleep      (u64 nanoseconds);
+kg_time_t     kg_time_now        (void);
+kg_time_t     kg_time_add        (kg_time_t t, kg_duration_t d);
+kg_time_t     kg_time_sub        (kg_time_t t, kg_duration_t d);
+b32           kg_time_is_equal   (kg_time_t t, kg_time_t o);
+b32           kg_time_is_after   (kg_time_t t, kg_time_t o);
+b32           kg_time_is_before  (kg_time_t t, kg_time_t o);
+kg_duration_t kg_time_diff       (kg_time_t t, kg_time_t other);
+kg_date_t     kg_time_to_date    (kg_time_t t);
+kg_datetime_t kg_time_to_datetime(kg_time_t t);
+i32           kg_time_to_year    (kg_time_t t);
+kg_month_t    kg_time_to_month   (kg_time_t t);
+i32           kg_time_to_day     (kg_time_t t);
 
 kg_duration_t kg_duration_create         (i64 milliseconds);
 kg_duration_t kg_duration_since          (kg_time_t t);
 i64           kg_duration_to_milliseconds(kg_duration_t d);
+
+kg_string_t kg_date_to_string    (kg_allocator_t* a, kg_date_t d);
+kg_string_t kg_datetime_to_string(kg_allocator_t* a, kg_datetime_t d);
 
 f64 kg_math_pow(f64 base, f64 exponent);
 
@@ -397,10 +413,21 @@ kg_inline i32 kg_mem_compare(const void* a, const void* b, isize size) {
     return kg_cast(i32)memcmp(a, b, size);
 }
 kg_inline void kg_mem_swap(void* a, void* b, isize size) {
-    u8 temp[size];
-    kg_mem_copy(temp, a, size);
-    kg_mem_copy(a, b, size);
-    kg_mem_copy(b, temp, size);
+    static const isize small_size = 256;
+    if (size <= small_size) {
+        u8 temp[size];
+        kg_mem_copy(temp, a, size);
+        kg_mem_copy(a, b, size);
+        kg_mem_copy(b, temp, size);
+    } else {
+        u8* temp = kg_mem_alloc(size);
+        if (temp) {
+            kg_mem_copy(temp, a, size);
+            kg_mem_copy(a, b, size);
+            kg_mem_copy(b, temp, size);
+            kg_mem_free(temp);
+        }
+    }
 }
 kg_inline void* kg_mem_move(void* dest, const void* src, isize size) {
     return memmove(dest, src, size);
@@ -524,6 +551,31 @@ kg_inline kg_allocator_t kg_allocator_temp(kg_arena_t* a) {
         },
         .context = a,
     };
+}
+
+void kg_quicksort(void* src, isize start_inc, isize end_exc, isize stride, kg_compare_fn_t compare_fn) {
+    if (src == null || stride == 0 || compare_fn == null || start_inc >= end_exc) {
+        return;
+    }
+    u8* casted_src = kg_cast(u8*)src;
+    isize i = start_inc;
+    isize j = end_exc - 1;
+    u8* p = casted_src + ((start_inc + (end_exc - start_inc) / 2) * stride);
+    while(i <= j) {
+        while(compare_fn(casted_src + (i * stride), p, stride) < 0) {i++;}
+        while(compare_fn(casted_src + (j * stride), p, stride) > 0) {j--;}
+        if (i <= j) {
+            kg_mem_swap(casted_src + (i * stride), casted_src + (j * stride), stride);
+            i++;
+            j--;
+        }
+    }
+    if (start_inc < j) {
+        kg_quicksort(src, start_inc, j + 1, stride, compare_fn);
+    }
+    if (i < end_exc) {
+        kg_quicksort(src, i - 1, end_exc, stride, compare_fn);
+    }
 }
 
 kg_string_t kg_string_create(kg_allocator_t* a, isize cap) {
@@ -725,6 +777,9 @@ b32 kg_string_is_equal(kg_string_t s, kg_string_t other) {
     }
     return out_ok;
 }
+kg_inline b32 kg_string_is_empty(kg_string_t s) {
+    return kg_string_len(s) == 0;
+}
 void kg_string_destroy(kg_string_t s) {
     if (s) {
         kg_string_header_t* h = kg_string_header(s);
@@ -769,7 +824,57 @@ kg_str_t kg_str_chop_first_split_by(kg_str_t* s, const kg_str_t split_by) {
     return out_str;
 }
 kg_inline kg_str_t kg_str_substr(const kg_str_t s, isize start_inc, isize end_exc) {
-    return (kg_str_t){.len = end_exc - start_inc, .ptr = s.ptr + start_inc};
+    kg_str_t out;
+    if (end_exc > 0 && start_inc <= end_exc) {
+        if (end_exc > s.len) {
+            end_exc = s.len;
+        }
+        if (start_inc < 0) {
+            start_inc = 0;
+        }
+        out = (kg_str_t){.len = end_exc - start_inc, .ptr = s.ptr + start_inc};
+    } else {
+        out = kg_str_create_empty();
+    }
+    return out;
+}
+kg_str_t kg_str_substr_from(const kg_str_t s, isize start_inc) {
+    return kg_str_substr(s, start_inc, s.len);
+}
+kg_str_t kg_str_substr_to(const kg_str_t s, isize end_exc) {
+    return kg_str_substr(s, 0, end_exc);
+}
+kg_str_t kg_str_trim_space(const kg_str_t s) {
+    kg_str_t out = s;
+    if (out.ptr && out.len > 0) {
+        while(out.ptr) {
+        }
+    }
+    return out;
+}
+kg_str_t kg_str_trim_prefix(const kg_str_t s, const kg_str_t prefix) {
+    kg_str_t out;
+    if (kg_str_has_prefix(s, prefix)) {
+        out = (kg_str_t){
+            .len = s.len - prefix.len,
+            .ptr = s.ptr + prefix.len,
+        };
+    } else {
+        out = kg_str_create_empty();
+    }
+    return out;
+}
+kg_str_t kg_str_trim_suffix(const kg_str_t s, const kg_str_t suffix) {
+    kg_str_t out;
+    if (kg_str_has_suffix(s, suffix)) {
+        out = (kg_str_t){
+            .len = s.len - suffix.len,
+            .ptr = s.ptr,
+        };
+    } else {
+        out = kg_str_create_empty();
+    }
+    return out;
 }
 kg_inline b32 kg_str_is_empty(const kg_str_t s) {
     return s.ptr && s.len == 0;
@@ -808,23 +913,6 @@ kg_inline b32 kg_str_has_suffix(const kg_str_t s, const kg_str_t suffix) {
     b32 out_ok = false;
     if (s.len >= suffix.len) {
         out_ok = strncmp(s.ptr + s.len - suffix.len, suffix.ptr, suffix.len) == 0;
-    }
-    return out_ok;
-}
-b32 kg_str_cut_prefix(kg_str_t* s, const kg_str_t prefix) {
-    b32 out_ok = false;
-    if (kg_str_has_prefix(*s, prefix)) {
-        s->len -= prefix.len;
-        s->ptr += prefix.len;
-        out_ok = true;
-    }
-    return out_ok;
-}
-b32 kg_str_cut_suffix(kg_str_t* s, const kg_str_t suffix) {
-    b32 out_ok = false;
-    if (kg_str_has_suffix(*s, suffix)) {
-        s->len -= suffix.len;
-        out_ok = true;
     }
     return out_ok;
 }
@@ -896,24 +984,59 @@ b32 kg_str_to_i64(i64* i, const kg_str_t s) {
     *i = value;
     return out_ok;
 }
-kg_str_t kg_b32_to_str(b32 b) {
-    kg_str_t out_str;
-    if (b) {
-        out_str = (kg_str_t){.len = 4, .ptr = "true"};
-    } else {
-        out_str = (kg_str_t){.len = 5, .ptr = "false"};
-    }
-    return out_str;
+kg_string_t kg_b32_to_string(kg_allocator_t* a, b32 b) {
+    return kg_string_from_cstr(a, b ? "true" : "false");
 }
-kg_str_t kg_u64_to_str(u64 u) {
+kg_string_t kg_u64_to_string(kg_allocator_t* a, u64 u) {
+    kg_string_t out = null;
     char buf[21];
     isize len = sprintf(buf, "%lu", u);
-    return (kg_str_t){.len = len, .ptr = buf};
+    if (len > 0) {
+        out = kg_string_from_cstr(a, buf);
+    }
+    return out;
 }
-kg_str_t kg_i64_to_str(u64 i) {
+kg_string_t kg_i64_to_string(kg_allocator_t* a, u64 i) {
+    kg_string_t out = null;
     char buf[21];
     isize len = sprintf(buf, "%li", i);
-    return (kg_str_t){.len = len, .ptr = buf};
+    if (len > 0) {
+        out = kg_string_from_cstr(a, buf);
+    }
+    return out;
+}
+kg_inline char kg_char_to_lower(char c) {
+    if (c >= 'A' && c <= 'Z') {
+        return 'a' + (c - 'A');
+    }
+    return c;
+}
+kg_inline char kg_char_to_upper(char c) {
+    if (c >= 'a' && c <= 'z') {
+        return 'A' + (c - 'a');
+    }
+    return c;
+}
+kg_inline b32 kg_char_is_space(char c) {
+    switch(c) {
+        case ' ':
+        case '\t':
+        case '\n':
+        case '\r':
+        case '\f':
+        case '\v':
+            return true;
+    }
+    return false;
+}
+kg_inline b32 kg_char_is_digit(char c) {
+    return c >= '0' && c <= '9';
+}
+kg_inline b32 kg_char_is_alpha(char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+kg_inline b32 kg_char_is_alphanumeric(char c) {
+    return kg_char_is_digit(c) || kg_char_is_alpha(c);
 }
 
 void* kg_darray_create_(kg_allocator_t* allocator, isize stride, isize cap) {
@@ -1245,6 +1368,19 @@ kg_date_t kg_time_to_date(kg_time_t t) {
     };
     return out;
 }
+kg_datetime_t kg_time_to_datetime(kg_time_t t) {
+    i64 seconds = t.milliseconds / 1000;
+    struct tm *lt = localtime(&seconds);
+    kg_datetime_t out = {
+        .year    = lt->tm_year + 1900,
+        .month   = lt->tm_mon + 1,
+        .day     = lt->tm_mday,
+        .hour    = lt->tm_hour,
+        .minute  = lt->tm_min,
+        .second  = lt->tm_sec,
+    };
+    return out;
+}
 i32 kg_time_to_year(kg_time_t t) {
     i64 seconds = t.milliseconds / 1000;
     struct tm *lt = localtime(&seconds);
@@ -1272,6 +1408,24 @@ kg_duration_t kg_duration_since(kg_time_t t) {
 i64 kg_duration_to_milliseconds(kg_duration_t d) {
     return d.milliseconds;
 }
+kg_string_t kg_date_to_string(kg_allocator_t* a, kg_date_t d) {
+    kg_string_t out = null;
+    char buf[kg_sizeof(kg_datetime_t) * 4] = {0};
+    i32 result = sprintf(buf, "%d-%02d-%02d", d.year, d.month, d.day);
+    if (result > 0) {
+        out = kg_string_from_cstr(a, buf);
+    }
+    return out;
+}
+kg_string_t kg_datetime_to_string(kg_allocator_t* a, kg_datetime_t d) {
+    kg_string_t out = null;
+    char buf[kg_sizeof(kg_datetime_t) * 8] = {0};
+    i32 result = sprintf(buf, "%d-%02d-%02d %02d:%02d:%02d", d.year, d.month, d.day, d.hour, d.minute, d.second);
+    if (result > 0) {
+        out = kg_string_from_cstr(a, buf);
+    }
+    return out;
+}
 
 kg_inline f64 kg_math_pow(f64 base, f64 exponent) {
     f64 out = 1.0;
@@ -1283,7 +1437,7 @@ kg_inline f64 kg_math_pow(f64 base, f64 exponent) {
 
 void kg_assert_handler(const char* prefix, const char* condition, const char* file, isize line, const char* fmt, ...) {
     kg_allocator_t allocator = kg_allocator_default();
-    kg_string_t string = kg_string_from_fmt(&allocator, "%s: (%s:%li) %s ", prefix, file, line, condition);
+    kg_string_t string = kg_string_from_fmt(&allocator, "[%s] %s:%li %s | ", prefix, file, line, condition);
     if (string) {
         va_list args;
         va_start(args, fmt);
@@ -1295,32 +1449,6 @@ void kg_assert_handler(const char* prefix, const char* condition, const char* fi
         kg_string_destroy(string);
     }
     kg_exit(1);
-}
-
-void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char* fmt, ...) {
-    static const char* level_cstrs[KG_LOG_LEVEL__SENTINEL] = {
-        [KG_LOG_LEVEL_TRACE] = "[TRACE]: ",
-        [KG_LOG_LEVEL_DEBUG] = "[DEBUG]: ",
-        [KG_LOG_LEVEL_INFO]  = "[INFO]: ",
-        [KG_LOG_LEVEL_WARN]  = "[WARN]: ",
-        [KG_LOG_LEVEL_ERROR] = "[ERROR]: ",
-        [KG_LOG_LEVEL_FATAL] = "[FATAL]: ",
-    };
-    kg_allocator_t allocator = kg_allocator_default();
-    kg_string_t string = kg_string_from_fmt(&allocator, "%s(%s:%li) ", level_cstrs[level], file, line);
-    if (string) {
-        va_list args;
-        va_start(args, fmt);
-        string = kg_string_append_fmt_v(string, fmt, args);
-        va_end(args);
-    }
-    if (string) {
-        kg_printf("%s\n", string);
-        kg_string_destroy(string);
-    }
-    if (level == KG_LOG_LEVEL_FATAL) {
-        kg_exit(1);
-    }
 }
 
 #ifdef KG_THREADS
@@ -1370,7 +1498,7 @@ typedef struct kg_thread_t {
 } kg_thread_t;
 
 b32  kg_thread_create (kg_thread_t* t, kg_thread_fn_t fn, void* user_data);
-b32  kg_thread_wait   (kg_thread_t* t);
+b32  kg_thread_join   (kg_thread_t* t);
 b32  kg_thread_detach (kg_thread_t* t);
 i32  kg_thread_id     (void);
 void kg_thread_destroy(kg_thread_t* t);
@@ -1394,7 +1522,7 @@ typedef struct kg_pool_t {
 
 b32  kg_pool_create  (kg_pool_t* p, kg_allocator_t* a, isize n);
 b32  kg_pool_add_task(kg_pool_t* p, kg_thread_fn_t fn, void* arg);
-b32  kg_pool_wait    (kg_pool_t* p);
+b32  kg_pool_join    (kg_pool_t* p);
 void kg_pool_destroy (kg_pool_t* p);
 
 #ifdef KG_THREADS_IMPL
@@ -1482,7 +1610,7 @@ b32 kg_thread_create(kg_thread_t* t, kg_thread_fn_t fn, void* arg) {
     pthread_attr_destroy(&attr);
     return out_ok;
 }
-b32 kg_thread_wait(kg_thread_t* t) {
+b32 kg_thread_join(kg_thread_t* t) {
     b32 out_ok = false;
     if (t->is_running) {
         out_ok = pthread_join(t->posix_handle, null) == 0;
@@ -1501,7 +1629,7 @@ i32 kg_thread_id(void) {
 }
 void kg_thread_destroy(kg_thread_t* t) {
     if (t->is_running) {
-        kg_thread_wait(t);
+        kg_thread_join(t);
     }
 }
 
@@ -1547,7 +1675,6 @@ b32 kg_pool_create(kg_pool_t* p, kg_allocator_t* a, isize n) {
         kg_queue_create(&p->task_queue, p->allocator, kg_sizeof(kg_task_t), initial_queue_cap);
         for (isize i = 0; i < p->workers_n; i++) {
             kg_thread_create(&p->workers[i], kg_pool_loop_, p);
-            kg_thread_detach(&p->workers[i]);
         }
         out_ok = true;
     }
@@ -1565,7 +1692,7 @@ b32 kg_pool_add_task(kg_pool_t* p, kg_thread_fn_t fn, void* arg) {
     kg_mutex_unlock(&p->work_mutex);
     return out_ok;
 }
-b32 kg_pool_wait(kg_pool_t* p) {
+b32 kg_pool_join(kg_pool_t* p) {
     b32 out_ok = true;
     kg_mutex_lock(&p->work_mutex);
     while (true) {
@@ -1583,10 +1710,14 @@ void kg_pool_destroy(kg_pool_t* p) {
     p->stop = true;
     kg_cond_broadcast(&p->work_cond);
     kg_mutex_unlock(&p->work_mutex);
-    kg_pool_wait(p);
+    kg_pool_join(p);
     kg_mutex_destroy(&p->work_mutex);
     kg_cond_destroy(&p->work_cond);
     kg_cond_destroy(&p->working_cond);
+    for (isize i = 0; i < p->workers_n; i++) {
+        kg_thread_destroy(&p->workers[i]);
+    }
+    kg_queue_destroy(&p->task_queue);
     kg_allocator_free(p->allocator, p->workers, kg_sizeof(kg_thread_t) * p->workers_n);
 }
 
@@ -1797,6 +1928,120 @@ void kg_flags_usage(void) {
 #endif // KG_FLAGS
 
 #endif // KG_IMPL
+
+#ifdef KG_LOGGER
+
+typedef enum kg_log_level_t {
+    KG_LOG_LEVEL_TRACE = 0,
+    KG_LOG_LEVEL_DEBUG = 1,
+    KG_LOG_LEVEL_INFO  = 2,
+    KG_LOG_LEVEL_WARN  = 3,
+    KG_LOG_LEVEL_ERROR = 4,
+    KG_LOG_LEVEL_FATAL = 5,
+    KG_LOG_LEVEL__SENTINEL,
+} kg_log_level_t;
+
+#define KG_LOG_TRACE 1
+#define KG_LOG_DEBUG 1
+#define KG_LOG_INFO  1
+#define KG_LOG_WARN  1
+#define KG_LOG_ERROR 1
+#define KG_LOG_FATAL 1
+#define KG_LOG_NONE  0
+
+typedef struct kg_logger_internals_t {
+#ifdef KG_THREADS
+    kg_mutex_t mutex;
+#endif
+} kg_logger_internals_t;
+
+void kg_logger_create(void);
+void kg_log_handler  (kg_log_level_t level, const char* file, i64 line, const char* fmt, ...);
+
+#if KG_LOG_NONE != 1 && KG_LOG_TRACE == 1
+    #define kg_log_trace(fmt, ...) kg_log_handler(KG_LOG_LEVEL_TRACE, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
+#else   
+    #define kg_log_trace(fmt, ...)
+#endif
+#if KG_LOG_NONE != 1 && KG_LOG_DEBUG == 1
+    #define kg_log_debug(fmt, ...) kg_log_handler(KG_LOG_LEVEL_DEBUG, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
+#else   
+    #define kg_log_debug(fmt, ...)
+#endif
+#if KG_LOG_NONE != 1 && KG_LOG_INFO == 1
+    #define kg_log_info(fmt, ...) kg_log_handler(KG_LOG_LEVEL_INFO, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
+#else   
+    #define kg_log_info(fmt, ...)
+#endif
+#if KG_LOG_NONE != 1 && KG_LOG_WARN == 1
+    #define kg_log_warn(fmt, ...) kg_log_handler(KG_LOG_LEVEL_WARN, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
+#else   
+    #define kg_log_warn(fmt, ...)
+#endif
+#if KG_LOG_NONE != 1 && KG_LOG_ERROR == 1
+    #define kg_log_error(fmt, ...) kg_log_handler(KG_LOG_LEVEL_ERROR, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
+#else   
+    #define kg_log_error(fmt, ...)
+#endif
+#if KG_LOG_NONE != 1 && KG_LOG_FATAL == 1
+    #define kg_log_fatal(fmt, ...) kg_log_handler(KG_LOG_LEVEL_FATAL, __FILE__, kg_cast(i64)__LINE__, fmt, ##__VA_ARGS__)
+#else   
+    #define kg_log_fatal(fmt, ...)
+#endif
+
+#ifdef KG_LOGGER_IMPL
+
+static kg_logger_internals_t kg_logger_internals;
+void kg_logger_create(void) {
+#ifdef KG_THREADS
+    kg_mutex_create(&kg_logger_internals.mutex);
+#endif
+}
+void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char* fmt, ...) {
+#ifdef KG_THREADS
+    kg_mutex_lock(&kg_logger_internals.mutex);
+#endif
+    kg_cast(void)file;
+    kg_cast(void)line;
+    static const char* level_cstrs[KG_LOG_LEVEL__SENTINEL] = {
+        [KG_LOG_LEVEL_TRACE] = "[trace]",
+        [KG_LOG_LEVEL_DEBUG] = "[debug]",
+        [KG_LOG_LEVEL_INFO]  = "[info ]",
+        [KG_LOG_LEVEL_WARN]  = "[warn ]",
+        [KG_LOG_LEVEL_ERROR] = "[error]",
+        [KG_LOG_LEVEL_FATAL] = "[fatal]",
+    };
+    kg_allocator_t allocator = kg_allocator_default();
+    kg_time_t time = kg_time_now();
+    kg_datetime_t datetime = kg_time_to_datetime(time);
+    kg_string_t datetime_string = kg_datetime_to_string(&allocator, datetime);
+    kg_string_t string = kg_string_from_fmt(&allocator, "%s %s ", datetime_string, level_cstrs[level]);
+    if (string) {
+        va_list args;
+        va_start(args, fmt);
+        string = kg_string_append_fmt_v(string, fmt, args);
+        va_end(args);
+    }
+    if (string) {
+        kg_printf("%s\n", string);
+        kg_string_destroy(string);
+        string = null;
+    }
+    if (datetime_string) {
+        kg_string_destroy(datetime_string);
+        datetime_string = null;
+    }
+#ifdef KG_THREADS
+    kg_mutex_unlock(&kg_logger_internals.mutex);
+#endif
+    if (level == KG_LOG_LEVEL_FATAL) {
+        kg_exit(1);
+    }
+}
+
+#endif // KG_LOGGER_IMPL
+
+#endif // LG_LOGGER
 
 #ifdef KG_TESTER
 

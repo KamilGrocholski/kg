@@ -5,6 +5,14 @@
 #define KG_THREADS_IMPL
 #include "kg.h"
 
+void test_mem_swap() {
+    isize a = 1234;
+    isize b = 2345;
+    kg_mem_swap(&a, &b, kg_sizeof(isize));
+    kgt_expect_eq(a, 2345);
+    kgt_expect_eq(b, 1234);
+}
+
 void test_file_read_contant() {
     kg_allocator_t allocator = kg_allocator_default();
     kg_file_content_t content = kg_file_read_content(&allocator, "./test/test.txt");
@@ -75,10 +83,41 @@ void test_str_has_prefix() {
     kgt_expect_true(kg_str_has_prefix(a, b));
 }
 
+void test_str_trim_prefix() {
+    kg_str_t a = kg_str_create("AtestAtest");
+    kg_str_t b = kg_str_create("Atest");
+    kg_str_t c = kg_str_trim_prefix(a, b);
+    kgt_expect_eq(c.len, 5);
+    kgt_expect_mem_eq(a.ptr + 5, c.ptr, c.len);
+}
+
 void test_str_has_suffix() {
     kg_str_t a = kg_str_create("AtestAtestB");
     kg_str_t b = kg_str_create("B");
     kgt_expect_true(kg_str_has_suffix(a, b));
+}
+
+void test_str_trim_suffix() {
+    kg_str_t a = kg_str_create("AtestAtest");
+    kg_str_t b = kg_str_create("Atest");
+    kg_str_t c = kg_str_trim_suffix(a, b);
+    kgt_expect_eq(c.len, 5);
+    kgt_expect_mem_eq(a.ptr, c.ptr, c.len);
+}
+
+void test_str_sub() {
+    kg_str_t a = kg_str_create("AtestAtestB");
+    kg_str_t sub = kg_str_substr(a, 1, 5);
+    kgt_expect_eq(sub.len, 4);
+    kgt_expect_mem_eq(a.ptr + 1, sub.ptr, 4);
+
+    kg_str_t subfrom = kg_str_substr_from(a, 1);
+    kgt_expect_eq(subfrom.len, 10);
+    kgt_expect_mem_eq(a.ptr + 1, subfrom.ptr, 10);
+
+    kg_str_t subto = kg_str_substr_to(a, 5);
+    kgt_expect_eq(subto.len, 5);
+    kgt_expect_mem_eq(a.ptr, subto.ptr, 5);
 }
 
 void test_str_chop_first_split_by() {
@@ -244,10 +283,43 @@ void test_pool() {
     for (isize i = 0; i < iter; i++) {
         kg_pool_add_task(&p, test_pool_task_, &st);
     }
-    kg_pool_wait(&p);
+    kg_pool_join(&p);
     kg_mutex_destroy(&st.mutex);
     kgt_expect_eq(st.value, iter);
     kg_pool_destroy(&p);
+}
+
+void test_datetime() {
+    kg_allocator_t allocator = kg_allocator_default();
+    kg_time_t t = kg_time_now();
+    kg_datetime_t d = kg_time_to_datetime(t);
+    kg_string_t s = kg_datetime_to_string(&allocator, d);
+    kgt_expect_false(kg_string_is_empty(s));
+    kg_string_destroy(s);
+}
+
+void test_date() {
+    kg_allocator_t allocator = kg_allocator_default();
+    kg_time_t t = kg_time_now();
+    kg_date_t d = kg_time_to_date(t);
+    kg_string_t s = kg_date_to_string(&allocator, d);
+    kgt_expect_false(kg_string_is_empty(s));
+    kg_string_destroy(s);
+}
+
+void test_quicksort() {
+    isize len = 7;
+    isize values[7]      = {7,4,1,2,3,5,6};
+    isize values_copy[7] = {7,4,1,2,3,5,6};
+    isize expected[7]    = {1,2,3,4,5,6,7};
+    kg_quicksort(values, 0, 0, kg_sizeof(isize), kg_mem_compare);
+    for (isize i = 0; i < len; i++) {
+        kgt_expect_eq(values_copy[i], values[i]);
+    }
+    kg_quicksort(values, 0, len, kg_sizeof(isize), kg_mem_compare);
+    for (isize i = 0; i < len; i++) {
+        kgt_expect_eq(expected[i], values[i]);
+    }
 }
 
 int main() {
@@ -255,6 +327,7 @@ int main() {
     kgt_create(&t);
 
     kgt_test_t tests[] = {
+        kgt_register(test_mem_swap),
         kgt_register(test_file_read_contant),
         kgt_register(test_string_from_cstr),
         kgt_register(test_string_from_fmt),
@@ -264,7 +337,10 @@ int main() {
         kgt_register(test_str_index),
         kgt_register(test_str_contains),
         kgt_register(test_str_has_prefix),
+        kgt_register(test_str_trim_prefix),
         kgt_register(test_str_has_suffix),
+        kgt_register(test_str_trim_suffix),
+        kgt_register(test_str_sub),
         kgt_register(test_str_chop_first_split_by),
         kgt_register(test_duration_since),
         kgt_register(test_time_date),
@@ -276,6 +352,9 @@ int main() {
         kgt_register(test_allocator_temp),
         kgt_register(test_queue),
         kgt_register(test_pool),
+        kgt_register(test_datetime),
+        kgt_register(test_date),
+        kgt_register(test_quicksort),
     }; 
     isize tests_len = kg_sizeof(tests) / kg_sizeof(kgt_test_t);
 
