@@ -15,7 +15,7 @@ TESTCFILES = $(shell find $(TESTS_DIR) -type f -name "*.c")
 OBJS = $(patsubst %.c, $(BUILD_DIR)/%.o, $(SRCCFILES) $(LIBCFILES))
 
 CC = gcc
-CFLAGS = -std=gnu17 -D _GNU_SOURCE -D __STDC_WANT_LIB_EXT1__ -Wall -Wextra -pedantic -I$(INCLUDE_DIR)
+CFLAGS = -std=gnu17 -D _GNU_SOURCE -D __STDC_WANT_LIB_EXT1__ -Werror -Wall -Wextra -pedantic -I$(INCLUDE_DIR)
 LDFLAGS = -lm -lpthread
 
 ifeq ($(debug), 1)

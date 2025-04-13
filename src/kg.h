@@ -168,6 +168,7 @@ isize       kg_string_available       (const kg_string_t s);
 isize       kg_string_mem_size        (const kg_string_t s);
 b32         kg_string_is_valid        (const kg_string_t s);
 b32         kg_string_is_equal        (const kg_string_t s, const kg_string_t other);
+b32         kg_string_is_equal_cstr   (const kg_string_t s, const char* cstr);
 b32         kg_string_is_empty        (const kg_string_t s);
 void        kg_string_destroy         (kg_string_t s);
 
@@ -206,12 +207,49 @@ b32 kg_str_to_u64(u64* u, const kg_str_t s);
 b32 kg_str_to_i64(i64* i, const kg_str_t s);
 
 kg_string_t kg_b32_to_string(kg_allocator_t* a, b32 b);
+isize       kg_u64_to_cstr(char b[21], u64 u);
 kg_string_t kg_u64_to_string(kg_allocator_t* a, u64 u);
-kg_string_t kg_i64_to_string(kg_allocator_t* a, u64 i);
+isize       kg_i64_to_cstr(char b[21], i64 i);
+kg_string_t kg_i64_to_string(kg_allocator_t* a, i64 i);
+isize       kg_f64_to_cstr(char b[21], f64 f);
+kg_string_t kg_f64_to_string(kg_allocator_t* a, f64 f);
 
 char kg_char_to_lower(char c);
 char kg_char_to_upper(char c);
 b32  kg_char_is_space(char c);
+
+typedef struct kg_string_builder_t {
+    kg_allocator_t* allocator;
+    isize           cap;
+    isize           len;
+    char*           write_ptr;
+    char*           real_ptr;
+} kg_string_builder_t;
+
+b32         kg_string_builder_create          (kg_string_builder_t* b, kg_allocator_t* a, isize cap);
+b32         kg_string_builder_write_unsafe    (kg_string_builder_t* b, const char* cstr, isize n);
+b32         kg_string_builder_write_u64       (kg_string_builder_t* b, u64 u);
+b32         kg_string_builder_write_i64       (kg_string_builder_t* b, i64 i);
+b32         kg_string_builder_write_f64       (kg_string_builder_t* b, f64 f);
+b32         kg_string_builder_write_char      (kg_string_builder_t* b, char c);
+b32         kg_string_builder_write_rune      (kg_string_builder_t* b, rune r);
+b32         kg_string_builder_write_cstr      (kg_string_builder_t* b, const char* c);
+b32         kg_string_builder_write_cstr_n    (kg_string_builder_t* b, const char* c, isize n);
+b32         kg_string_builder_write_str       (kg_string_builder_t* b, const kg_str_t s);
+b32         kg_string_builder_write_str_n     (kg_string_builder_t* b, const kg_str_t s, isize n);
+b32         kg_string_builder_write_string    (kg_string_builder_t* b, const kg_string_t s);
+b32         kg_string_builder_write_string_n  (kg_string_builder_t* b, const kg_string_t s, isize n);
+b32         kg_string_builder_grow            (kg_string_builder_t* b, isize n);
+b32         kg_string_builder_cap             (const kg_string_builder_t* b);
+b32         kg_string_builder_len             (const kg_string_builder_t* b);
+b32         kg_string_builder_available       (const kg_string_builder_t* b);
+b32         kg_string_builder_ensure_available(kg_string_builder_t* b, isize n);
+b32         kg_string_builder_reset           (kg_string_builder_t* b);
+kg_string_t kg_string_builder_to_string       (const kg_string_builder_t* b, kg_allocator_t* a);
+char*       kg_string_builder_to_cstr         (const kg_string_builder_t* b, kg_allocator_t* a);
+isize       kg_string_builder_grow_formula    (const kg_string_builder_t* b, isize n);
+isize       kg_string_builder_mem_size        (const kg_string_builder_t* b);
+void        kg_string_builder_destroy         (kg_string_builder_t* b);
 
 typedef struct kg_darray_header_t {
     isize           len;
@@ -757,6 +795,15 @@ kg_inline b32 kg_string_is_equal(const kg_string_t s, const kg_string_t other) {
     }
     return out_ok;
 }
+kg_inline b32 kg_string_is_equal_cstr(const kg_string_t s, const char* cstr) {
+    b32 out_ok = false;
+    if (s && cstr) {
+        kg_str_t s_str = (kg_str_t){.len = kg_string_len(s), .ptr = s};
+        kg_str_t cstr_str = kg_str_create(cstr);
+        out_ok = kg_str_is_equal(s_str, cstr_str);
+    }
+    return out_ok;
+}
 kg_inline b32 kg_string_is_empty(const kg_string_t s) {
     return kg_string_len(s) == 0;
 }
@@ -921,11 +968,11 @@ isize kg_str_index_char(const kg_str_t s, char needle) {
 
 #define KG_VALID_BOOL_STRS_MAP_LEN 5
 static struct {kg_str_t str; b32 bool;} KG_VALID_BOOL_STRS_MAP[KG_VALID_BOOL_STRS_MAP_LEN] = {
-    {{.len = 4, .ptr = "true"}, true},
-    {{.len = 2, .ptr = "ok"}, true},
-    {{.len = 3, .ptr = "yes"}, true},
+    {{.len = 4, .ptr = "true"},  true},
+    {{.len = 2, .ptr = "ok"},    true},
+    {{.len = 3, .ptr = "yes"},   true},
     {{.len = 5, .ptr = "false"}, false},
-    {{.len = 2, .ptr = "no"}, false},
+    {{.len = 2, .ptr = "no"},    false},
 };
 b32 kg_str_to_b32(b32* b, const kg_str_t s) {
     b32 out_ok = false;
@@ -967,19 +1014,49 @@ b32 kg_str_to_i64(i64* i, const kg_str_t s) {
 kg_string_t kg_b32_to_string(kg_allocator_t* a, b32 b) {
     return kg_string_from_cstr(a, b ? "true" : "false");
 }
+isize kg_u64_to_cstr(char b[21], u64 u) {
+    isize len = sprintf(b, "%lu", u);
+    if (len > 0) {
+        b[len] = '\0';
+    }
+    return len;
+}
 kg_string_t kg_u64_to_string(kg_allocator_t* a, u64 u) {
     kg_string_t out = null;
-    char buf[21];
+    char buf[21] = {0};
     isize len = sprintf(buf, "%lu", u);
     if (len > 0) {
         out = kg_string_from_cstr(a, buf);
     }
     return out;
 }
-kg_string_t kg_i64_to_string(kg_allocator_t* a, u64 i) {
+isize kg_i64_to_cstr(char b[21], i64 i) {
+    isize len = sprintf(b, "%li", i);
+    if (len > 0) {
+        b[len] = '\0';
+    }
+    return len;
+}
+kg_string_t kg_i64_to_string(kg_allocator_t* a, i64 i) {
     kg_string_t out = null;
-    char buf[21];
+    char buf[21] = {0};
     isize len = sprintf(buf, "%li", i);
+    if (len > 0) {
+        out = kg_string_from_cstr(a, buf);
+    }
+    return out;
+}
+isize kg_f64_to_cstr(char b[21], f64 f) {
+    isize len = sprintf(b, "%lf", f);
+    if (len > 0) {
+        b[len] = '\0';
+    }
+    return len;
+}
+kg_string_t kg_f64_to_string(kg_allocator_t* a, f64 f) {
+    kg_string_t out = null;
+    char buf[21] = {0};
+    isize len = sprintf(buf, "%lf", f);
     if (len > 0) {
         out = kg_string_from_cstr(a, buf);
     }
@@ -1017,6 +1094,155 @@ kg_inline b32 kg_char_is_alpha(char c) {
 }
 kg_inline b32 kg_char_is_alphanumeric(char c) {
     return kg_char_is_digit(c) || kg_char_is_alpha(c);
+}
+
+b32 kg_string_builder_create(kg_string_builder_t* b, kg_allocator_t* a, isize cap) {
+    b32 out_ok = false;
+    *b = (kg_string_builder_t){
+        .allocator = a,
+        .cap       = cap,
+        .real_ptr  = kg_allocator_alloc(a, cap),
+    };
+    if (b->real_ptr) {
+        out_ok = true;
+    }
+    return out_ok;
+}
+kg_inline b32 kg_string_builder_write_unsafe(kg_string_builder_t* b, const char* cstr, isize n) {
+    b32 out_ok = false;
+    if (kg_string_builder_ensure_available(b, n)) {
+        kg_mem_copy(b->write_ptr, cstr, n);
+        b->len += n;
+        out_ok = true;
+    }
+    return out_ok;
+}
+kg_inline b32 kg_string_builder_write_u64(kg_string_builder_t* b, u64 u) {
+    b32 out_ok = false;
+    char buf[21] = {0};
+    isize len = kg_u64_to_cstr(buf, u);
+    out_ok = kg_string_builder_write_unsafe(b, buf, len);
+    return out_ok;
+}
+kg_inline b32 kg_string_builder_write_i64(kg_string_builder_t* b, i64 i) {
+    b32 out_ok = false;
+    char buf[21] = {0};
+    isize len = kg_i64_to_cstr(buf, i);
+    out_ok = kg_string_builder_write_unsafe(b, buf, len);
+    return out_ok;
+}
+kg_inline b32 kg_string_builder_write_f64(kg_string_builder_t* b, f64 f) {
+    b32 out_ok = false;
+    char buf[21] = {0};
+    isize len = kg_f64_to_cstr(buf, f);
+    out_ok = kg_string_builder_write_unsafe(b, buf, len);
+    return out_ok;
+}
+kg_inline b32 kg_string_builder_write_char(kg_string_builder_t* b, char c) {
+    b32 out_ok = false;
+    if (kg_string_builder_ensure_available(b, 1)) {
+        *b->write_ptr = c;
+        b->len++;
+        out_ok = true;
+    }
+    return out_ok;
+}
+kg_inline b32 kg_string_builder_write_rune(kg_string_builder_t* b, rune r) {
+    kg_cast(void)b;
+    kg_cast(void)r;
+    kg_panic("not implemented");
+    return true;
+}
+kg_inline b32 kg_string_builder_write_cstr(kg_string_builder_t* b, const char* c) {
+    b32 out_ok = false;
+    isize len = kg_cast(isize)strnlen(c, ISIZE_MAX);
+    if (len > 0) {
+        out_ok = kg_string_builder_write_unsafe(b, c, len);
+    }
+    return out_ok;
+}
+kg_inline b32 kg_string_builder_write_cstr_n(kg_string_builder_t* b, const char* c, isize n) {    
+    return kg_string_builder_write_unsafe(b, c, n);
+}
+kg_inline b32 kg_string_builder_write_str(kg_string_builder_t* b, const kg_str_t s) {
+    return kg_string_builder_write_unsafe(b, s.ptr, s.len);
+}
+kg_inline b32 kg_string_builder_write_str_n(kg_string_builder_t* b, const kg_str_t s, isize n) {
+    return kg_string_builder_write_unsafe(b, s.ptr, n > s.len ? s.len : n);
+}
+kg_inline b32 kg_string_builder_write_string(kg_string_builder_t* b, const kg_string_t s) {
+    isize len = kg_string_len(s);
+    return kg_string_builder_write_unsafe(b, s, len);
+}
+kg_inline b32 kg_string_builder_write_string_n(kg_string_builder_t* b, const kg_string_t s, isize n) {
+    isize len = kg_string_len(s);
+    return kg_string_builder_write_unsafe(b, s, n > len ? len : n);
+}
+kg_inline b32 kg_string_builder_grow(kg_string_builder_t* b, isize n) {
+    b32 out_ok = false;
+    isize old_mem_size = kg_string_builder_mem_size(b);
+    isize new_mem_size = old_mem_size + n;
+    char* new_real_ptr = kg_allocator_resize(b->allocator, b->real_ptr, old_mem_size, new_mem_size);
+    if (new_real_ptr) {
+        b->real_ptr = new_real_ptr;
+        b->write_ptr = b->real_ptr + b->len;
+        b->cap += n;
+        out_ok = true;
+    }
+    return out_ok;
+}
+kg_inline b32 kg_string_builder_cap(const kg_string_builder_t* b) {
+    return b ? b->cap : 0;
+}
+kg_inline b32 kg_string_builder_len(const kg_string_builder_t* b) {
+    return b ? b->len : 0;
+}
+kg_inline b32 kg_string_builder_available(const kg_string_builder_t* b) {
+    b32 out = 0;
+    if (b && b->cap < b->len) {
+        out = b->cap - b->len;
+    }
+    return out;
+}
+kg_inline b32 kg_string_builder_ensure_available(kg_string_builder_t* b, isize n) {
+    b32 out_ok = true;
+    if (kg_string_builder_available(b) < n) {
+        isize new_cap = kg_string_builder_grow_formula(b, n);
+        out_ok = kg_string_builder_grow(b, new_cap);
+    }
+    return out_ok;
+}
+
+b32 kg_string_builder_reset(kg_string_builder_t* b) {
+    b32 out_ok = false;
+    if (b) {
+        b->write_ptr = b->real_ptr;
+        b->len = 0;
+        out_ok = true;
+    }
+    return out_ok;
+}
+kg_string_t kg_string_builder_to_string(const kg_string_builder_t* b, kg_allocator_t* a) {
+    return kg_string_from_cstr_n(a, b->real_ptr, b->len);
+}
+char* kg_string_builder_to_cstr(const kg_string_builder_t* b, kg_allocator_t* a) {
+    char* out = kg_allocator_alloc(a, b->len + 1);
+    if (out) {
+        kg_mem_copy(out, b->real_ptr, b->len);
+        out[b->len] = '\0';
+    }
+    return out;
+}
+kg_inline isize kg_string_builder_grow_formula(const kg_string_builder_t* b, isize n) {
+    return b->cap * 2 + n;
+}
+kg_inline isize kg_string_builder_mem_size(const kg_string_builder_t* b) {
+    return b ? b->cap : 0;
+}
+void kg_string_builder_destroy(kg_string_builder_t* b) {
+    if (b) {
+        kg_allocator_free(b->allocator, b->real_ptr, kg_string_builder_mem_size(b));
+    }
 }
 
 void* kg_darray_create_(kg_allocator_t* allocator, isize stride, isize cap) {
@@ -1927,7 +2153,10 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
         kg_time_t time = kg_time_now();
         kg_datetime_t datetime = kg_time_to_datetime(time);
         kg_string_t datetime_string = kg_datetime_to_string(&allocator, datetime);
-        string = kg_string_from_fmt(&allocator, "%s %s ", datetime_string, level_cstrs[level]);
+        string = kg_string_create(&allocator, 256);
+        if (string) {
+            string = kg_string_append_fmt(string,"%s %s ", datetime_string, level_cstrs[level]);
+        }
         if (datetime_string) {
             kg_string_destroy(datetime_string);
             datetime_string = null;
@@ -1955,82 +2184,6 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
 #endif // KG_LOGGER_IMPL
 
 #endif // LG_LOGGER
-
-#ifdef KG_FORMATTER
-
-typedef i32 (*kg_fmt_fn_t)(const char* fmt, va_list args);
-
-void kg_fmt_register(const char* name, kg_fmt_fn_t fn);
-
-void kg_fmt(const char* fmt, ...);
-
-#endif // KG_FORMATTER
-
-#ifdef KG_FORMATTER_IMPL
-
-typedef struct kg_formatter_entry_t {
-    const char* name;
-    kg_fmt_fn_t fn;
-} kg_formatter_entry_t;
-
-#define KG_FORMATTER_ENTRIES_CAP 128
-static isize                kg_formatter_entries_len = 0;
-static kg_formatter_entry_t kg_formatter_entries[KG_FORMATTER_ENTRIES_CAP];
-
-static kg_fmt_fn_t kg_formatter_find(const char* name) {
-    kg_fmt_fn_t out = null;
-    for (isize i = 0; i < kg_formatter_entries_len; i++) {
-        kg_formatter_entry_t entry = kg_formatter_entries[i];
-        if (strcmp(entry.name, name) == 0) {
-            out = entry.fn;
-        }
-    }
-    return out;
-}
-
-void kg_fmt_register(const char* name, kg_fmt_fn_t fn) {
-    kg_assert(kg_formatter_entries_len < KG_FORMATTER_ENTRIES_CAP);
-    kg_formatter_entries[kg_formatter_entries_len++] = (kg_formatter_entry_t){
-        .name = name,
-        .fn   = fn,
-    };
-}
-
-static void kg_read_rp_name(char buf[256], const char* ptr) {
-    isize i = 0;
-    while(*ptr != '}') {
-        buf[i++] = *ptr;
-        ptr++;
-    }
-    buf[i] = '\0';
-}
-
-void kg_fmt(const char* fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    char buf[256] = {0};
-    while (*fmt) {
-        if (*fmt == '{') {
-            fmt++;
-            kg_read_rp_name(buf, fmt);
-            while (*fmt && *fmt != '}') fmt++;
-            if (*fmt == '}') fmt++;
-            kg_fmt_fn_t fn = kg_formatter_find(buf);
-            if (fn) {
-                fn(fmt, args);
-            } else {
-                fprintf(stderr, "Formatter not found for: %s\n", buf);
-            }
-            kg_mem_zero(buf, 256);
-        } else {
-            putchar(*fmt++);
-        }
-    }
-
-    va_end(args);
-}
-
-#endif // KG_FORMATTER_IMPL
 
 #ifdef KG_TESTER
 

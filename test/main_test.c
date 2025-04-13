@@ -322,6 +322,59 @@ void test_quicksort() {
     }
 }
 
+void test_string_builder() {
+    kg_allocator_t a = kg_allocator_default();
+    kg_string_builder_t b;
+    isize init_cap = 1;
+    kgt_expect_true(kg_string_builder_create(&b, &a, init_cap));
+    kgt_expect_eq(kg_string_builder_cap(&b), init_cap);
+
+    char c = 'c';
+    kgt_expect_true(kg_string_builder_write_char(&b, c));
+    kgt_expect_mem_eq(b.write_ptr, &c, 1);
+
+    kg_string_t f = kg_string_builder_to_string(&b, &a);
+    kgt_expect_true(kg_string_is_equal_cstr(f, "c"));
+    kg_string_destroy(f);
+
+    kg_str_t str = kg_str_create("str");
+    kgt_expect_true(kg_string_builder_write_str(&b, str));
+    kgt_expect_mem_eq(b.write_ptr, str.ptr, str.len);
+
+    kg_string_t f2 = kg_string_builder_to_string(&b, &a);
+    kgt_expect_true(kg_string_is_equal_cstr(f2, "cstr"));
+    kg_string_destroy(f2);
+
+    kg_str_t strn = kg_str_create("str");
+    kgt_expect_true(kg_string_builder_write_str_n(&b, strn, 2));
+    kgt_expect_mem_eq(b.write_ptr, strn.ptr, 2);
+
+    kg_string_t f3 = kg_string_builder_to_string(&b, &a);
+    kgt_expect_true(kg_string_is_equal_cstr(f3, "cstrst"));
+    kg_string_destroy(f3);
+
+    const char* cstr = "cstr";
+    kgt_expect_true(kg_string_builder_write_cstr(&b, cstr));
+    kgt_expect_mem_eq(b.write_ptr, cstr, 4);
+
+    kg_string_t f4 = kg_string_builder_to_string(&b, &a);
+    kgt_expect_true(kg_string_is_equal_cstr(f4, "cstrstcstr"));
+    kg_string_destroy(f4);
+
+    const char* cstrn = "cstr";
+    kgt_expect_true(kg_string_builder_write_cstr_n(&b, cstrn, 2));
+    kgt_expect_mem_eq(b.write_ptr, cstrn, 2);
+
+    kg_string_t f5 = kg_string_builder_to_string(&b, &a);
+    kgt_expect_true(kg_string_is_equal_cstr(f5, "cstrstcstrcs"));
+    kg_string_destroy(f5);
+
+    kgt_expect_true(kg_string_builder_reset(&b));
+    kgt_expect_eq(kg_string_builder_len(&b), 0);
+
+    kg_string_builder_destroy(&b);
+}
+
 int main() {
     kgt_t t;
     kgt_create(&t);
@@ -355,6 +408,7 @@ int main() {
         kgt_register(test_datetime),
         kgt_register(test_date),
         kgt_register(test_quicksort),
+        kgt_register(test_string_builder),
     }; 
     isize tests_len = kg_sizeof(tests) / kg_sizeof(kgt_test_t);
 
