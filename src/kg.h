@@ -384,7 +384,7 @@ const u64 KG_SECOND      = 1000 * KG_MILLISECOND;
 const u64 KG_MINUTE      = 60 * KG_SECOND;
 const u64 KG_HOUR        = 60 * KG_MINUTE;
 
-void          kg_time_sleep      (u64 nanoseconds);
+void          kg_time_sleep      (const kg_duration_t d);
 kg_time_t     kg_time_now        (void);
 kg_time_t     kg_time_add        (const kg_time_t t, const kg_duration_t d);
 kg_time_t     kg_time_sub        (const kg_time_t t, const kg_duration_t d);
@@ -398,9 +398,10 @@ i32           kg_time_to_year    (const kg_time_t t);
 kg_month_t    kg_time_to_month   (const kg_time_t t);
 i32           kg_time_to_day     (const kg_time_t t);
 
-kg_duration_t kg_duration_create         (i64 milliseconds);
-kg_duration_t kg_duration_since          (const kg_time_t t);
-i64           kg_duration_to_milliseconds(const kg_duration_t d);
+kg_duration_t kg_duration_create           (i64 milliseconds);
+kg_duration_t kg_duration_from_milliseconds(i64 milliseconds);
+kg_duration_t kg_duration_since            (const kg_time_t t);
+i64           kg_duration_to_milliseconds  (const kg_duration_t d);
 
 kg_string_t kg_date_to_string    (kg_allocator_t* a, const kg_date_t d);
 isize       kg_date_to_cstr      (char b[DATE_MAX_CHARS_LEN], const kg_date_t d);
@@ -1480,10 +1481,11 @@ b32 kg_file_close(kg_file_t* f) {
     return out_ok;
 }
 
-void kg_time_sleep(u64 nanoseconds) {
+void kg_time_sleep(const kg_duration_t d) {
+    i64 milliseconds = kg_duration_to_milliseconds(d);
     struct timespec ts = {
-        .tv_sec = nanoseconds / KG_SECOND,
-        .tv_nsec = nanoseconds % KG_SECOND,
+        .tv_sec  = milliseconds / 1000,
+        .tv_nsec = milliseconds % 1000,
     };
     nanosleep(&ts, null);
 }
@@ -1558,6 +1560,9 @@ kg_inline i32 kg_time_to_day(const kg_time_t t) {
     return lt->tm_mday;
 }
 kg_inline kg_duration_t kg_duration_create(i64 milliseconds) {
+    return (kg_duration_t){milliseconds};
+}
+kg_inline kg_duration_t kg_duration_from_milliseconds(i64 milliseconds) {
     return (kg_duration_t){milliseconds};
 }
 kg_inline kg_duration_t kg_duration_since(const kg_time_t t) {

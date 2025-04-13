@@ -30,6 +30,7 @@ i32 main(i32 argc, char* argv[]) {
     }
 
     kg_log_info("str_flag: %.*s", str_flag.len, str_flag.ptr);
+    kg_time_sleep(kg_duration_from_milliseconds(1000));
     kg_log_info("b32_flag: %s", b32_flag ? "true" : "false");
     kg_log_info("u64_flag: %lu", u64_flag);
     kg_log_info("i64_flag: %li", i64_flag);
