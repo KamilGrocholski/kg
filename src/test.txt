@@ -1,3 +1,0 @@
-VALUE=4
-NOM=5
-OK=no
