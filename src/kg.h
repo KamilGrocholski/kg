@@ -55,6 +55,13 @@ typedef ptrdiff_t isize;
 #define false 0
 #define null  NULL
 
+#define U64_MAX_CHARS_LEN      21
+#define I64_MAX_CHARS_LEN      21
+#define DATE_MAX_CHARS_LEN     21
+#define DATETIME_MAX_CHARS_LEN 41
+#define B32_MAX_CHARS_LEN      6
+#define F64_MAX_CHARS_LEN      25
+
 #define kg_bit(x) (1<<(x))
 
 #define kg_mask_set(var, set, mask) do { \
@@ -206,12 +213,13 @@ b32 kg_str_to_b32(b32* b, const kg_str_t s);
 b32 kg_str_to_u64(u64* u, const kg_str_t s);
 b32 kg_str_to_i64(i64* i, const kg_str_t s);
 
+isize       kg_b32_to_cstr  (char buf[B32_MAX_CHARS_LEN], b32 b);
 kg_string_t kg_b32_to_string(kg_allocator_t* a, b32 b);
-isize       kg_u64_to_cstr(char b[21], u64 u);
+isize       kg_u64_to_cstr  (char buf[U64_MAX_CHARS_LEN], u64 u);
 kg_string_t kg_u64_to_string(kg_allocator_t* a, u64 u);
-isize       kg_i64_to_cstr(char b[21], i64 i);
+isize       kg_i64_to_cstr  (char buf[I64_MAX_CHARS_LEN], i64 i);
 kg_string_t kg_i64_to_string(kg_allocator_t* a, i64 i);
-isize       kg_f64_to_cstr(char b[21], f64 f);
+isize       kg_f64_to_cstr  (char buf[F64_MAX_CHARS_LEN], f64 f);
 kg_string_t kg_f64_to_string(kg_allocator_t* a, f64 f);
 
 char kg_char_to_lower(char c);
@@ -248,7 +256,6 @@ b32         kg_string_builder_available       (const kg_string_builder_t* b);
 b32         kg_string_builder_ensure_available(kg_string_builder_t* b, isize n);
 b32         kg_string_builder_reset           (kg_string_builder_t* b);
 kg_string_t kg_string_builder_to_string       (const kg_string_builder_t* b, kg_allocator_t* a);
-char*       kg_string_builder_to_cstr         (const kg_string_builder_t* b, kg_allocator_t* a);
 isize       kg_string_builder_grow_formula    (const kg_string_builder_t* b, isize n);
 isize       kg_string_builder_mem_size        (const kg_string_builder_t* b);
 void        kg_string_builder_destroy         (kg_string_builder_t* b);
@@ -396,9 +403,9 @@ kg_duration_t kg_duration_since          (const kg_time_t t);
 i64           kg_duration_to_milliseconds(const kg_duration_t d);
 
 kg_string_t kg_date_to_string    (kg_allocator_t* a, const kg_date_t d);
-isize       kg_date_to_cstr      (char b[64], const kg_date_t d);
+isize       kg_date_to_cstr      (char b[DATE_MAX_CHARS_LEN], const kg_date_t d);
 kg_string_t kg_datetime_to_string(kg_allocator_t* a, const kg_datetime_t d);
-isize       kg_datetime_to_cstr  (char b[64], const kg_datetime_t d);
+isize       kg_datetime_to_cstr  (char b[DATETIME_MAX_CHARS_LEN], const kg_datetime_t d);
 
 f64 kg_math_pow(f64 base, f64 exponent);
 
@@ -1018,50 +1025,54 @@ b32 kg_str_to_i64(i64* i, const kg_str_t s) {
 kg_string_t kg_b32_to_string(kg_allocator_t* a, b32 b) {
     return kg_string_from_cstr(a, b ? "true" : "false");
 }
-isize kg_u64_to_cstr(char b[21], u64 u) {
-    isize len = sprintf(b, "%lu", u);
+isize kg_b32_to_cstr(char buf[B32_MAX_CHARS_LEN], b32 b) {
+    isize len = sprintf(buf, "%s", b ? "true" : "false");
     if (len > 0) {
-        b[len] = '\0';
+        buf[len] = '\0';
+    }
+    return len;
+}
+isize kg_u64_to_cstr(char buf[U64_MAX_CHARS_LEN], u64 u) {
+    isize len = sprintf(buf, "%lu", u);
+    if (len > 0) {
+        buf[len] = '\0';
     }
     return len;
 }
 kg_string_t kg_u64_to_string(kg_allocator_t* a, u64 u) {
     kg_string_t out = null;
-    char buf[21] = {0};
-    isize len = sprintf(buf, "%lu", u);
-    if (len > 0) {
+    char buf[U64_MAX_CHARS_LEN] = {0};
+    if (kg_u64_to_cstr(buf, u) > 0) {
         out = kg_string_from_cstr(a, buf);
     }
     return out;
 }
-isize kg_i64_to_cstr(char b[21], i64 i) {
-    isize len = sprintf(b, "%li", i);
+isize kg_i64_to_cstr(char buf[I64_MAX_CHARS_LEN], i64 i) {
+    isize len = sprintf(buf, "%li", i);
     if (len > 0) {
-        b[len] = '\0';
+        buf[len] = '\0';
     }
     return len;
 }
 kg_string_t kg_i64_to_string(kg_allocator_t* a, i64 i) {
     kg_string_t out = null;
-    char buf[21] = {0};
-    isize len = sprintf(buf, "%li", i);
-    if (len > 0) {
+    char buf[I64_MAX_CHARS_LEN] = {0};
+    if (kg_i64_to_cstr(buf, i) > 0) {
         out = kg_string_from_cstr(a, buf);
     }
     return out;
 }
-isize kg_f64_to_cstr(char b[21], f64 f) {
-    isize len = sprintf(b, "%lf", f);
+isize kg_f64_to_cstr(char buf[F64_MAX_CHARS_LEN], f64 f) {
+    isize len = sprintf(buf, "%lf", f);
     if (len > 0) {
-        b[len] = '\0';
+        buf[len] = '\0';
     }
     return len;
 }
 kg_string_t kg_f64_to_string(kg_allocator_t* a, f64 f) {
     kg_string_t out = null;
-    char buf[21] = {0};
-    isize len = sprintf(buf, "%lf", f);
-    if (len > 0) {
+    char buf[F64_MAX_CHARS_LEN] = {0};
+    if (kg_i64_to_cstr(buf, f) > 0) {
         out = kg_string_from_cstr(a, buf);
     }
     return out;
@@ -1124,21 +1135,21 @@ kg_inline b32 kg_string_builder_write_unsafe(kg_string_builder_t* b, const char*
 }
 kg_inline b32 kg_string_builder_write_u64(kg_string_builder_t* b, u64 u) {
     b32 out_ok = false;
-    char buf[21] = {0};
+    char buf[U64_MAX_CHARS_LEN] = {0};
     isize len = kg_u64_to_cstr(buf, u);
     out_ok = kg_string_builder_write_unsafe(b, buf, len);
     return out_ok;
 }
 kg_inline b32 kg_string_builder_write_i64(kg_string_builder_t* b, i64 i) {
     b32 out_ok = false;
-    char buf[21] = {0};
+    char buf[I64_MAX_CHARS_LEN] = {0};
     isize len = kg_i64_to_cstr(buf, i);
     out_ok = kg_string_builder_write_unsafe(b, buf, len);
     return out_ok;
 }
 kg_inline b32 kg_string_builder_write_f64(kg_string_builder_t* b, f64 f) {
     b32 out_ok = false;
-    char buf[21] = {0};
+    char buf[F64_MAX_CHARS_LEN] = {0};
     isize len = kg_f64_to_cstr(buf, f);
     out_ok = kg_string_builder_write_unsafe(b, buf, len);
     return out_ok;
@@ -1259,14 +1270,6 @@ b32 kg_string_builder_reset(kg_string_builder_t* b) {
 }
 kg_string_t kg_string_builder_to_string(const kg_string_builder_t* b, kg_allocator_t* a) {
     return kg_string_from_cstr_n(a, b->real_ptr, b->len);
-}
-char* kg_string_builder_to_cstr(const kg_string_builder_t* b, kg_allocator_t* a) {
-    char* out = kg_allocator_alloc(a, b->len + 1);
-    if (out) {
-        kg_mem_copy(out, b->real_ptr, b->len);
-        out[b->len] = '\0';
-    }
-    return out;
 }
 kg_inline isize kg_string_builder_grow_formula(const kg_string_builder_t* b, isize n) {
     return b->cap * 2 + n;
@@ -1568,14 +1571,13 @@ kg_inline i64 kg_duration_to_milliseconds(const kg_duration_t d) {
 }
 kg_string_t kg_date_to_string(kg_allocator_t* a, const kg_date_t d) {
     kg_string_t out = null;
-    char buf[kg_sizeof(kg_datetime_t) * 4] = {0};
-    i32 result = sprintf(buf, "%d-%02d-%02d", d.year, d.month, d.day);
-    if (result > 0) {
+    char buf[DATE_MAX_CHARS_LEN] = {0};
+    if (kg_date_to_cstr(buf, d) > 0) {
         out = kg_string_from_cstr(a, buf);
     }
     return out;
 }
-isize kg_date_to_cstr(char b[64], const kg_date_t d) {
+isize kg_date_to_cstr(char b[DATE_MAX_CHARS_LEN], const kg_date_t d) {
     i32 len = sprintf(b, "%d-%02d-%02d", d.year, d.month, d.day);
     if (len > 0) {
         b[len] = '\0';
@@ -1584,14 +1586,13 @@ isize kg_date_to_cstr(char b[64], const kg_date_t d) {
 }
 kg_string_t kg_datetime_to_string(kg_allocator_t* a, const kg_datetime_t d) {
     kg_string_t out = null;
-    char buf[kg_sizeof(kg_datetime_t) * 8] = {0};
-    i32 result = sprintf(buf, "%d-%02d-%02d %02d:%02d:%02d", d.year, d.month, d.day, d.hour, d.minute, d.second);
-    if (result > 0) {
+    char buf[DATETIME_MAX_CHARS_LEN] = {0};
+    if (kg_datetime_to_cstr(buf, d) > 0) {
         out = kg_string_from_cstr(a, buf);
     }
     return out;
 }
-isize kg_datetime_to_cstr(char b[64], const kg_datetime_t d) {
+isize kg_datetime_to_cstr(char b[DATETIME_MAX_CHARS_LEN], const kg_datetime_t d) {
     isize len = sprintf(b, "%d-%02d-%02d %02d:%02d:%02d", d.year, d.month, d.day, d.hour, d.minute, d.second);
     if (len > 0) {
         b[len] = '\0';
