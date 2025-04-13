@@ -1985,7 +1985,7 @@ void kg_flag_str(kg_str_t* holder, const char* name, const kg_str_t default_valu
 }
 void kg_flag_parse_b32(kg_flag_t* f, kg_str_t raw_value) {
     f->raw_value = raw_value;
-    kg_assert_msg(kg_str_to_b32(f->holder_b32, raw_value), "invalid str representation of b32")
+    kg_assert_fmt(kg_str_to_b32(f->holder_b32, raw_value), "invalid str representation of b32")
 }
 void kg_flag_b32(b32* holder, const char* name, b32 default_value, const char* usage) {
     *holder = default_value;
@@ -2005,7 +2005,7 @@ void kg_flag_b32(b32* holder, const char* name, b32 default_value, const char* u
 }
 void kg_flag_parse_i64(kg_flag_t* f, kg_str_t raw_value) {
     f->raw_value = raw_value;
-    kg_assert_msg(kg_str_to_i64(f->holder_i64, raw_value), "invalid str representation of i64")
+    kg_assert_fmt(kg_str_to_i64(f->holder_i64, raw_value), "invalid str representation of i64")
 }
 void kg_flag_i64(i64* holder, const char* name, i64 default_value, const char* usage) {
     *holder = default_value;
@@ -2025,7 +2025,7 @@ void kg_flag_i64(i64* holder, const char* name, i64 default_value, const char* u
 }
 void kg_flag_parse_u64(kg_flag_t* f, kg_str_t raw_value) {
     f->raw_value = raw_value;
-    kg_assert_msg(kg_str_to_u64(f->holder_u64, raw_value), "invalid str representation of u64")
+    kg_assert_fmt(kg_str_to_u64(f->holder_u64, raw_value), "invalid str representation of u64")
 }
 void kg_flag_u64(u64* holder, const char* name, u64 default_value, const char* usage) {
     *holder = default_value;
@@ -2201,8 +2201,8 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
         if (level != KG_LOG_LEVEL_RAW) {
             kg_time_t time = kg_time_now();
             kg_datetime_t datetime = kg_time_to_datetime(time);
-            char datetime_cstr[64] = {0};
-            if (kg_datetime_to_cstr(datetime_cstr, datetime)) {
+            char datetime_cstr[DATETIME_MAX_CHARS_LEN] = {0};
+            if (kg_datetime_to_cstr(datetime_cstr, datetime) > 0) {
                 kg_string_builder_write_fmt(&sb, "%s %s ", datetime_cstr, level_cstrs[level]);
             }
         } 
@@ -2217,12 +2217,12 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
         kg_string_destroy(final_msg);
         kg_string_builder_destroy(&sb);
     }
-#ifdef KG_THREADS
-    kg_mutex_unlock(&kg_logger_internals.mutex);
-#endif
     if (level == KG_LOG_LEVEL_FATAL) {
         kg_exit(1);
     }
+#ifdef KG_THREADS
+    kg_mutex_unlock(&kg_logger_internals.mutex);
+#endif
 }
 
 #endif // KG_LOGGER_IMPL
