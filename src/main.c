@@ -13,6 +13,7 @@ i32 main() {
     isize indexc = kg_str_index_char(name, 'e');
     kg_log("str: %li", index);
     kg_log("char:%li", indexc);
+    kg_log("v2:%s", "okeja");
 
     return 0;
 }

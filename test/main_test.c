@@ -331,7 +331,7 @@ void test_string_builder() {
 
     char c = 'c';
     kgt_expect_true(kg_string_builder_write_char(&b, c));
-    kgt_expect_mem_eq(b.write_ptr, &c, 1);
+    kgt_expect_eq(b.len, 1);
 
     kg_string_t f = kg_string_builder_to_string(&b, &a);
     kgt_expect_true(kg_string_is_equal_cstr(f, "c"));
@@ -339,7 +339,7 @@ void test_string_builder() {
 
     kg_str_t str = kg_str_create("str");
     kgt_expect_true(kg_string_builder_write_str(&b, str));
-    kgt_expect_mem_eq(b.write_ptr, str.ptr, str.len);
+    kgt_expect_eq(b.len, 4);
 
     kg_string_t f2 = kg_string_builder_to_string(&b, &a);
     kgt_expect_true(kg_string_is_equal_cstr(f2, "cstr"));
@@ -347,7 +347,7 @@ void test_string_builder() {
 
     kg_str_t strn = kg_str_create("str");
     kgt_expect_true(kg_string_builder_write_str_n(&b, strn, 2));
-    kgt_expect_mem_eq(b.write_ptr, strn.ptr, 2);
+    kgt_expect_eq(b.len, 6);
 
     kg_string_t f3 = kg_string_builder_to_string(&b, &a);
     kgt_expect_true(kg_string_is_equal_cstr(f3, "cstrst"));
@@ -355,7 +355,7 @@ void test_string_builder() {
 
     const char* cstr = "cstr";
     kgt_expect_true(kg_string_builder_write_cstr(&b, cstr));
-    kgt_expect_mem_eq(b.write_ptr, cstr, 4);
+    kgt_expect_eq(b.len, 10);
 
     kg_string_t f4 = kg_string_builder_to_string(&b, &a);
     kgt_expect_true(kg_string_is_equal_cstr(f4, "cstrstcstr"));
@@ -363,11 +363,18 @@ void test_string_builder() {
 
     const char* cstrn = "cstr";
     kgt_expect_true(kg_string_builder_write_cstr_n(&b, cstrn, 2));
-    kgt_expect_mem_eq(b.write_ptr, cstrn, 2);
+    kgt_expect_eq(b.len, 12);
 
     kg_string_t f5 = kg_string_builder_to_string(&b, &a);
     kgt_expect_true(kg_string_is_equal_cstr(f5, "cstrstcstrcs"));
     kg_string_destroy(f5);
+
+    kgt_expect_true(kg_string_builder_write_fmt(&b, " %s %li", "fmt", 4));
+    kgt_expect_eq(b.len, 18);
+
+    kg_string_t f6 = kg_string_builder_to_string(&b, &a);
+    kgt_expect_true(kg_string_is_equal_cstr(f6, "cstrstcstrcs fmt 4"));
+    kg_string_destroy(f6);
 
     kgt_expect_true(kg_string_builder_reset(&b));
     kgt_expect_eq(kg_string_builder_len(&b), 0);

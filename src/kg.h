@@ -233,6 +233,8 @@ b32         kg_string_builder_write_i64       (kg_string_builder_t* b, i64 i);
 b32         kg_string_builder_write_f64       (kg_string_builder_t* b, f64 f);
 b32         kg_string_builder_write_char      (kg_string_builder_t* b, char c);
 b32         kg_string_builder_write_rune      (kg_string_builder_t* b, rune r);
+b32         kg_string_builder_write_fmt       (kg_string_builder_t* b, const char* fmt, ...);
+b32         kg_string_builder_write_fmt_v     (kg_string_builder_t* b, const char* fmt, va_list args);
 b32         kg_string_builder_write_cstr      (kg_string_builder_t* b, const char* c);
 b32         kg_string_builder_write_cstr_n    (kg_string_builder_t* b, const char* c, isize n);
 b32         kg_string_builder_write_str       (kg_string_builder_t* b, const kg_str_t s);
@@ -394,7 +396,9 @@ kg_duration_t kg_duration_since          (const kg_time_t t);
 i64           kg_duration_to_milliseconds(const kg_duration_t d);
 
 kg_string_t kg_date_to_string    (kg_allocator_t* a, const kg_date_t d);
+isize       kg_date_to_cstr      (char b[64], const kg_date_t d);
 kg_string_t kg_datetime_to_string(kg_allocator_t* a, const kg_datetime_t d);
+isize       kg_datetime_to_cstr  (char b[64], const kg_datetime_t d);
 
 f64 kg_math_pow(f64 base, f64 exponent);
 
@@ -1113,6 +1117,7 @@ kg_inline b32 kg_string_builder_write_unsafe(kg_string_builder_t* b, const char*
     if (kg_string_builder_ensure_available(b, n)) {
         kg_mem_copy(b->write_ptr, cstr, n);
         b->len += n;
+        b->write_ptr += n;
         out_ok = true;
     }
     return out_ok;
@@ -1152,6 +1157,36 @@ kg_inline b32 kg_string_builder_write_rune(kg_string_builder_t* b, rune r) {
     kg_cast(void)r;
     kg_panic("not implemented");
     return true;
+}
+b32 kg_string_builder_write_fmt(kg_string_builder_t* b, const char* fmt, ...) {
+    b32 out_ok = false;
+    if (fmt && b) {
+        va_list args;
+        va_start(args, fmt);
+        out_ok = kg_string_builder_write_fmt_v(b, fmt, args);
+        va_end(args);
+    }
+    return out_ok;
+}
+b32 kg_string_builder_write_fmt_v(kg_string_builder_t* b, const char* fmt, va_list args) {
+    b32 out_ok = false;
+    if (fmt && b) {
+        va_list args_copy;
+        va_copy(args_copy, args);
+        isize length_check = vsnprintf(0, 0, fmt, args_copy);
+        va_end(args_copy);
+        if (length_check >= 0) {
+            isize length = kg_cast(isize)length_check;
+            isize new_length = kg_string_builder_len(b) + length;
+            if (kg_string_builder_ensure_available(b, new_length)) {
+                vsnprintf(b->write_ptr, length + 1, fmt, args);
+                b->len = new_length;
+                b->write_ptr += length;
+                out_ok = true;
+            }
+        }
+    }
+    return out_ok;
 }
 kg_inline b32 kg_string_builder_write_cstr(kg_string_builder_t* b, const char* c) {
     b32 out_ok = false;
@@ -1540,6 +1575,13 @@ kg_string_t kg_date_to_string(kg_allocator_t* a, const kg_date_t d) {
     }
     return out;
 }
+isize kg_date_to_cstr(char b[64], const kg_date_t d) {
+    i32 len = sprintf(b, "%d-%02d-%02d", d.year, d.month, d.day);
+    if (len > 0) {
+        b[len] = '\0';
+    }
+    return len;
+}
 kg_string_t kg_datetime_to_string(kg_allocator_t* a, const kg_datetime_t d) {
     kg_string_t out = null;
     char buf[kg_sizeof(kg_datetime_t) * 8] = {0};
@@ -1548,6 +1590,13 @@ kg_string_t kg_datetime_to_string(kg_allocator_t* a, const kg_datetime_t d) {
         out = kg_string_from_cstr(a, buf);
     }
     return out;
+}
+isize kg_datetime_to_cstr(char b[64], const kg_datetime_t d) {
+    isize len = sprintf(b, "%d-%02d-%02d %02d:%02d:%02d", d.year, d.month, d.day, d.hour, d.minute, d.second);
+    if (len > 0) {
+        b[len] = '\0';
+    }
+    return len;
 }
 
 kg_inline f64 kg_math_pow(f64 base, f64 exponent) {
@@ -2146,32 +2195,26 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
         [KG_LOG_LEVEL_FATAL] = "[fatal]",
     };
     kg_allocator_t allocator = kg_allocator_default();
-    kg_string_t string;
-    if (level == KG_LOG_LEVEL_RAW) {
-        string = kg_string_create(&allocator, 128);
-    } else {
-        kg_time_t time = kg_time_now();
-        kg_datetime_t datetime = kg_time_to_datetime(time);
-        kg_string_t datetime_string = kg_datetime_to_string(&allocator, datetime);
-        string = kg_string_create(&allocator, 256);
-        if (string) {
-            string = kg_string_append_fmt(string,"%s %s ", datetime_string, level_cstrs[level]);
-        }
-        if (datetime_string) {
-            kg_string_destroy(datetime_string);
-            datetime_string = null;
-        }
-    }
-    if (string) {
+    kg_string_builder_t sb;
+    if (kg_string_builder_create(&sb, &allocator, 128)) {
+        if (level != KG_LOG_LEVEL_RAW) {
+            kg_time_t time = kg_time_now();
+            kg_datetime_t datetime = kg_time_to_datetime(time);
+            char datetime_cstr[64] = {0};
+            if (kg_datetime_to_cstr(datetime_cstr, datetime)) {
+                kg_string_builder_write_fmt(&sb, "%s %s ", datetime_cstr, level_cstrs[level]);
+            }
+        } 
         va_list args;
         va_start(args, fmt);
-        string = kg_string_append_fmt_v(string, fmt, args);
+        kg_string_builder_write_fmt_v(&sb, fmt, args);
         va_end(args);
-    }
-    if (string) {
-        kg_printf("%s\n", string);
-        kg_string_destroy(string);
-        string = null;
+        kg_string_t final_msg = kg_string_builder_to_string(&sb, &allocator);
+        if (final_msg) {
+            kg_printf("%s\n", final_msg);
+        }
+        kg_string_destroy(final_msg);
+        kg_string_builder_destroy(&sb);
     }
 #ifdef KG_THREADS
     kg_mutex_unlock(&kg_logger_internals.mutex);
@@ -2204,21 +2247,21 @@ void       kgt_destroy (kgt_t* t);
 
 void kgt_expect_handler(const char* cond, const char* msg, const char* file, isize line);
 
-#define kgt_expect(cond, msg)         if (cond) {} else { kgt_expect_handler(#cond, msg, __FILE__, kg_cast(isize)__LINE__); }
-#define kgt_expect_null(a)            kgt_expect(a == null, "expected null")
-#define kgt_expect_not_null(a)        kgt_expect(a != null, "expected not null")
-#define kgt_expect_eq(a, b)           kgt_expect(a == b, "expected eq")
-#define kgt_expect_neq(a, b)          kgt_expect(a != b, "expected neq")
-#define kgt_expect_ptr_eq(a, b)       kgt_expect(a == b, "expected ptr eq")
-#define kgt_expect_ptr_neq(a, b)      kgt_expect(a != b, "expected ptr neq")
-#define kgt_expect_true(a)            kgt_expect(a == true, "expected true")
-#define kgt_expect_false(a)           kgt_expect(a == false, "expected false")
-#define kgt_expect_mem_eq(a, b, s)    kgt_expect(kg_mem_compare(a, b, s) == 0, "expected memory eq")
-#define kgt_expect_mem_neq(a, c, s)   kgt_expect(kg_mem_compare(a, b, s) != 0, "expected memory neq")
-#define kgt_expect_cstr_eq(a, b)      kgt_expect(strcmp(a, b) == 0, "expected cstr eq")
-#define kgt_expect_cstr_neq(a, c)     kgt_expect(strcmp(a, b) != 0, "expected cstr neq")
-#define kgt_expect_cstrn_eq(a, b, s)  kgt_expect(strncmp(a, b, s) == 0, "expected cstrn eq")
-#define kgt_expect_cstrn_neq(a, c, s) kgt_expect(strncmp(a, b, s) != 0, "expected cstrn neq")
+#define kgt_expect(cond, msg)          if (cond) {} else { kgt_expect_handler(#cond, msg, __FILE__, kg_cast(isize)__LINE__); }
+#define kgt_expect_null(a)             kgt_expect(a == null, "expected null")
+#define kgt_expect_not_null(a)         kgt_expect(a != null, "expected not null")
+#define kgt_expect_eq(a, b)            kgt_expect(a == b, "expected eq")
+#define kgt_expect_neq(a, b)           kgt_expect(a != b, "expected neq")
+#define kgt_expect_ptr_eq(a, b)        kgt_expect(a == b, "expected ptr eq")
+#define kgt_expect_ptr_neq(a, b)       kgt_expect(a != b, "expected ptr neq")
+#define kgt_expect_true(a)             kgt_expect(a == true, "expected true")
+#define kgt_expect_false(a)            kgt_expect(a == false, "expected false")
+#define kgt_expect_mem_eq(a, b, s)     kgt_expect(kg_mem_compare(a, b, s) == 0, "expected memory eq")
+#define kgt_expect_mem_neq(a, c, s)    kgt_expect(kg_mem_compare(a, b, s) != 0, "expected memory neq")
+#define kgt_expect_cstr_eq(a, b)       kgt_expect(strcmp(a, b) == 0, "expected cstr eq")
+#define kgt_expect_cstr_neq(a, c)      kgt_expect(strcmp(a, b) != 0, "expected cstr neq")
+#define kgt_expect_cstr_n_eq(a, b, n)  kgt_expect(strncmp(a, b, n) == 0, "expected cstr n eq")
+#define kgt_expect_cstr_n_neq(a, c, n) kgt_expect(strncmp(a, b, n) != 0, "expected cstr n neq")
 
 #endif // KG_TESTER
 
