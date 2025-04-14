@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>
+#include <stdio.h>
 
 typedef int8_t    i8;
 typedef int16_t   i16;
@@ -62,13 +63,6 @@ typedef ptrdiff_t isize;
 #define B32_MAX_CHARS_LEN      6
 #define F64_MAX_CHARS_LEN      25
 
-#define kg_bit(x) (1<<(x))
-
-#define kg_mask_set(var, set, mask) do { \
-    if (set) (var) |=  (mask); \
-    else     (var) &= ~(mask); \
-} while(0)
-
 #define kg_cast(T)       (T)
 #define kg_sizeof(T)     kg_cast(isize)sizeof(T)
 #define kg_static_assert static_assert
@@ -76,13 +70,35 @@ typedef ptrdiff_t isize;
 #define kg_inline        inline
 #define kg_extern        extern
 
+#define kg_bit(x) (1<<(x))
+#define kg_mask_set(var, set, mask) do { \
+    if (set) (var) |=  (mask); \
+    else     (var) &= ~(mask); \
+} while(0)
+
+#define kg_min(x, y)           ((x) < (y) ? (x) : (y))
+#define kg_max(x, y)           ((x) > (y) ? (x) : (y))
+#define kg_clamp(x, i, j)      kg_min(kg_max((x), (i)), (j))
+#define kg_abs(x)              ((x) < 0 ? -(x) : (x))
+#define kg_is_between(x, i, j) (((x) >= (i)) && ((x) <= (j)))
+
+#define kg_kibibytes(x) (            (x) * (i64)1024)
+#define kg_mebibytes(x) (kg_kibibytes(x) * (i64)1024)
+#define kg_gibibytes(x) (kg_mebibytes(x) * (i64)1024)
+#define kg_tibibytes(x) (kg_gibibytes(x) * (i64)1024)
+
+#define kg_kilobytes(x) (            (x) * (i64)1000)
+#define kg_megabytes(x) (kg_kilobytes(x) * (i64)1000)
+#define kg_gigabytes(x) (kg_megabytes(x) * (i64)1000)
+#define kg_terabytes(x) (kg_gigabytes(x) * (i64)1000)
+
 #if defined(__linux__)
     #define KG_PLATFORM_LINUX 1
 #else
     #error "Unknown platform"
 #endif
 
-#define kg_exit(code) exit(code)
+void kg_exit(i32 code);
 
 void kg_printf(const char* fmt, ...);
 
@@ -121,12 +137,14 @@ void  kg_arena_destroy  (kg_arena_t* a);
 kg_allocator_t kg_allocator_default(void);
 kg_allocator_t kg_allocator_temp   (kg_arena_t* a);
 
-#define kg_allocator_alloc_one(a, T)                    (T*)((a)->proc.alloc(a, kg_sizeof(T)))
-#define kg_allocator_alloc_array(a, T, n)               (T*)((a)->proc.alloc(a, kg_sizeof(T) * n))
-#define kg_allocator_alloc(a, size)                     (a)->proc.alloc(a, size)
-#define kg_allocator_free(a, ptr, size)                 (a)->proc.free(a, ptr, size)
-#define kg_allocator_free_all(a, clear)                 (a)->proc.free_all(a, clear)
-#define kg_allocator_resize(a, ptr, old_size, new_size) (a)->proc.resize(a, ptr, old_size, new_size)
+#define kg_allocator_alloc_one(a, T)      (T*)(kg_allocator_alloc(a, kg_sizeof(T)))
+#define kg_allocator_alloc_array(a, T, n) (T*)(kg_allocator_alloc(a, kg_sizeof(T) * n))
+
+void* kg_allocator_alloc     (kg_allocator_t* a, isize s);
+void* kg_allocator_alloc_zero(kg_allocator_t* a, isize s);
+void  kg_allocator_free      (kg_allocator_t* a, void* ptr, isize s);
+void  kg_allocator_free_all  (kg_allocator_t* a, b32 clear);
+void* kg_allocator_resize    (kg_allocator_t* a, void* ptr, isize old_size, isize new_size);
 
 typedef void* (*kg_allocator_allocate_fn_t)(kg_allocator_t* a, isize size);
 typedef void  (*kg_allocator_free_fn_t)    (kg_allocator_t* a, void* ptr, isize size);
@@ -443,7 +461,7 @@ kg_inline i32 kg_mem_compare(const void* a, const void* b, isize size) {
     return kg_cast(i32)memcmp(a, b, size);
 }
 kg_inline void kg_mem_swap(void* a, void* b, isize size) {
-    static const isize small_size = 256;
+    kg_static const isize small_size = 256;
     if (size <= small_size) {
         u8 temp[size];
         kg_mem_copy(temp, a, size);
@@ -461,6 +479,26 @@ kg_inline void kg_mem_swap(void* a, void* b, isize size) {
 }
 kg_inline void* kg_mem_move(void* dest, const void* src, isize size) {
     return memmove(dest, src, size);
+}
+
+kg_inline void* kg_allocator_alloc(kg_allocator_t* a, isize s) {
+    return a->proc.alloc(a, s);
+}
+kg_inline void* kg_allocator_alloc_zero(kg_allocator_t* a, isize s) {
+    void* out_mem = kg_allocator_alloc(a, s);
+    if (out_mem) {
+        kg_mem_zero(out_mem, s);
+    }
+    return out_mem;
+}
+kg_inline void kg_allocator_free(kg_allocator_t* a, void* ptr, isize s) {
+    a->proc.free(a, ptr, s);
+}
+kg_inline void kg_allocator_free_all(kg_allocator_t* a, b32 clear) {
+    a->proc.free_all(a, clear);
+}
+kg_inline void* kg_allocator_resize(kg_allocator_t* a, void* ptr, isize old_size, isize new_size) {
+    return a->proc.resize(a, ptr, old_size, new_size);
 }
 
 void* kg_allocator_default_alloc(kg_allocator_t* a, isize size) {
@@ -979,7 +1017,7 @@ isize kg_str_index_char(const kg_str_t s, char needle) {
 }
 
 #define KG_VALID_BOOL_STRS_MAP_LEN 5
-static struct {kg_str_t str; b32 bool;} KG_VALID_BOOL_STRS_MAP[KG_VALID_BOOL_STRS_MAP_LEN] = {
+kg_static struct {kg_str_t str; b32 bool;} KG_VALID_BOOL_STRS_MAP[KG_VALID_BOOL_STRS_MAP_LEN] = {
     {{.len = 4, .ptr = "true"},  true},
     {{.len = 2, .ptr = "ok"},    true},
     {{.len = 3, .ptr = "yes"},   true},
@@ -1281,6 +1319,7 @@ kg_inline isize kg_string_builder_mem_size(const kg_string_builder_t* b) {
 void kg_string_builder_destroy(kg_string_builder_t* b) {
     if (b) {
         kg_allocator_free(b->allocator, b->real_ptr, kg_string_builder_mem_size(b));
+        kg_mem_zero(b, kg_sizeof(kg_string_builder_t));
     }
 }
 
@@ -1333,36 +1372,36 @@ b32 kg_queue_peek(const kg_queue_t* q, void* o) {
 }
 b32 kg_queue_enqueue(kg_queue_t* q, const void* o) {
     b32 out_ok = false;
-    if (kg_queue_ensure_available(q, 1)) {
+    if (q && o && kg_queue_ensure_available(q, 1)) {
         if (kg_mem_copy(kg_cast(u8*)q->real_ptr + (q->len * q->stride), o, q->stride) != null) {
-            out_ok = true;
             q->len++;
+            out_ok = true;
         }
     }
     return out_ok;
 }
 b32 kg_queue_deque(kg_queue_t* q, void* o) {
     b32 out_ok = false;
-    if (q->len > 0) {
+    if (q && o && q->len > 0) {
         out_ok = kg_mem_copy(o, q->real_ptr, q->stride) != null;
         if (out_ok) {
-            out_ok = kg_mem_move(q->real_ptr, kg_cast(u8*)q->real_ptr + q->stride, (q->len - 1) * q->stride) != null;
-            if (out_ok) {
-                q->len--;
-            }
+            kg_mem_move(q->real_ptr, kg_cast(u8*)q->real_ptr + q->stride, (q->len - 1) * q->stride);
+            q->len--;
         } 
     }
     return out_ok;
 }
 b32 kg_queue_grow(kg_queue_t* q, isize n) {
     b32 out_ok = false;
-    isize old_mem_size = kg_queue_mem_size(q);
-    isize new_mem_size = kg_queue_mem_size(q) + q->stride * n;
-    void* new_real_ptr = kg_allocator_resize(q->allocator, q->real_ptr, old_mem_size, new_mem_size);
-    if (new_real_ptr) {
-        q->cap += n;
-        q->real_ptr = new_real_ptr;
-        out_ok = true;
+    if (q && n > 0) {
+        isize old_mem_size = kg_queue_mem_size(q);
+        isize new_mem_size = kg_queue_mem_size(q) + q->stride * n;
+        void* new_real_ptr = kg_allocator_resize(q->allocator, q->real_ptr, old_mem_size, new_mem_size);
+        if (new_real_ptr) {
+            q->cap += n;
+            q->real_ptr = new_real_ptr;
+            out_ok = true;
+        }
     }
     return out_ok;
 }
@@ -1397,8 +1436,14 @@ kg_inline isize kg_queue_mem_size(const kg_queue_t* q) {
     return out;
 }
 void kg_queue_destroy(kg_queue_t* q) {
-    kg_allocator_free(q->allocator, q->real_ptr, kg_queue_mem_size(q));
-    *q = (kg_queue_t){0};
+    if (q) {
+        kg_allocator_free(q->allocator, q->real_ptr, kg_queue_mem_size(q));
+        kg_mem_zero(q, kg_sizeof(kg_queue_t));
+    }
+}
+
+kg_inline void kg_exit(i32 code) {
+    exit(code);
 }
 
 kg_inline void kg_printf(const char* fmt, ...) {
@@ -1710,11 +1755,14 @@ void kg_pool_destroy (kg_pool_t* p);
 #ifdef KG_THREADS_IMPL
 
 b32 kg_sema_create(kg_sema_t* s) {
-    return sem_init(&s->unix_handle, 0, 0) == 0;
+    return s ? sem_init(&s->unix_handle, 0, 0) == 0 : false;
 }
 b32 kg_sema_post(kg_sema_t* s, isize count) {
-    b32 out_ok = true;
-    while(count-- > 0) { sem_post(&s->unix_handle); }
+    b32 out_ok = false;
+    if (s) {
+        while(count-- > 0) { sem_post(&s->unix_handle); }
+        out_ok = true;
+    }
     return out_ok;
 }
 b32 kg_sema_wait(kg_sema_t* s) {
@@ -1723,7 +1771,9 @@ b32 kg_sema_wait(kg_sema_t* s) {
     return out_ok;
 }
 void kg_sema_destroy(kg_sema_t* s) {
-    sem_destroy(&s->unix_handle);
+    if (s) {
+        sem_destroy(&s->unix_handle);
+    }
 }
 
 b32 kg_mutex_create(kg_mutex_t* m) {
@@ -1739,16 +1789,18 @@ b32 kg_mutex_create(kg_mutex_t* m) {
     return out_ok;
 }
 b32 kg_mutex_lock(kg_mutex_t* m) {
-    return pthread_mutex_lock(&m->pthread_mutex) == 0;
+    return m ? pthread_mutex_lock(&m->pthread_mutex) == 0 : false;
 }
 b32 kg_mutex_try_lock(kg_mutex_t* m) {
-    return pthread_mutex_trylock(&m->pthread_mutex) == 0;
+    return m ? pthread_mutex_trylock(&m->pthread_mutex) == 0 : false;
 }
 b32 kg_mutex_unlock(kg_mutex_t* m) {
-    return pthread_mutex_unlock(&m->pthread_mutex) == 0;
+    return m ? pthread_mutex_unlock(&m->pthread_mutex) == 0 : false;
 }
 void kg_mutex_destroy(kg_mutex_t* m) {
-    pthread_mutex_destroy(&m->pthread_mutex);
+    if (m) {
+        pthread_mutex_destroy(&m->pthread_mutex);
+    }
 }
 
 b32 kg_cond_create(kg_cond_t* c) {
@@ -1758,7 +1810,7 @@ b32 kg_cond_create(kg_cond_t* c) {
     if (out_ok) {
         out_ok = pthread_cond_init(&c->pthread_cond, &attr) == 0;
         if (out_ok) {
-            out_ok = pthread_condattr_destroy(&attr);
+            out_ok = pthread_condattr_destroy(&attr) == 0;
         }
     }
     return out_ok;
@@ -1779,11 +1831,15 @@ b32 kg_cond_wait(kg_cond_t* c, kg_mutex_t* m) {
     return out_ok;
 }
 void kg_cond_destroy(kg_cond_t* c) {
-    pthread_cond_destroy(&c->pthread_cond);
+    if (c) {
+        pthread_cond_destroy(&c->pthread_cond);
+        kg_mem_zero(c, kg_sizeof(kg_cond_t));
+    }
 }
 
 b32 kg_thread_create(kg_thread_t* t, kg_thread_fn_t fn, void* arg) {
     b32 out_ok = false;
+    kg_mem_zero(t, kg_sizeof(kg_thread_t));
     t->is_running = true;
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -1794,10 +1850,9 @@ b32 kg_thread_create(kg_thread_t* t, kg_thread_fn_t fn, void* arg) {
 }
 b32 kg_thread_join(kg_thread_t* t) {
     b32 out_ok = false;
-    if (t->is_running) {
+    if (t && t->is_running) {
         out_ok = pthread_join(t->posix_handle, null) == 0;
-        t->posix_handle = 0;
-        t->is_running = false;
+        kg_mem_zero(t, kg_sizeof(kg_thread_t));
     }
     return out_ok;
 }
@@ -1810,9 +1865,12 @@ i32 kg_thread_id(void) {
     return pthread_self();
 }
 void kg_thread_destroy(kg_thread_t* t) {
-    if (t->is_running) {
-        kg_thread_join(t);
-    }
+    if (t) {
+        if (t->is_running) {
+            kg_thread_join(t);
+        }
+        kg_mem_zero(t, kg_sizeof(kg_thread_t));
+    } 
 }
 
 void* kg_pool_loop_(void* arg) {
@@ -1843,35 +1901,45 @@ void* kg_pool_loop_(void* arg) {
     return null;
 }
 b32 kg_pool_create(kg_pool_t* p, kg_allocator_t* a, isize n) {
-    static isize initial_queue_cap = 16;
+    kg_static isize initial_queue_cap = 16;
     b32 out_ok = false;
-    *p = (kg_pool_t){
-        .allocator = a,
-        .workers_n = n,
-    };
-    p->workers = kg_allocator_alloc_array(p->allocator, kg_thread_t, p->workers_n);
-    if (p->workers) {
-        kg_mutex_create(&p->work_mutex);
-        kg_cond_create(&p->work_cond);
-        kg_cond_create(&p->working_cond);
-        kg_queue_create(&p->task_queue, p->allocator, kg_sizeof(kg_task_t), initial_queue_cap);
-        for (isize i = 0; i < p->workers_n; i++) {
-            kg_thread_create(&p->workers[i], kg_pool_loop_, p);
-        }
-        out_ok = true;
+    if (p && a && n > 0) {
+        *p = (kg_pool_t){
+            .allocator = a,
+            .workers_n = n,
+        };
+        p->workers = kg_allocator_alloc_zero(p->allocator, kg_sizeof(kg_thread_t) * p->workers_n);
+        if (p->workers) {
+            if (!kg_mutex_create(&p->work_mutex)) goto cleanup;
+            if (!kg_cond_create(&p->work_cond)) goto cleanup;
+            if (!kg_cond_create(&p->working_cond)) goto cleanup;
+            if (!kg_queue_create(&p->task_queue, p->allocator, kg_sizeof(kg_task_t), initial_queue_cap)) goto cleanup;
+            for (isize i = 0; i < p->workers_n; i++) {
+                if (!kg_thread_create(&p->workers[i], kg_pool_loop_, p)) goto cleanup;
+            }
+            out_ok = true;
+
+cleanup:
+    if (!out_ok) {
+        kg_pool_destroy(p);
     }
+        }
+    }
+
     return out_ok;
 }
 b32 kg_pool_add_task(kg_pool_t* p, kg_thread_fn_t fn, void* arg) {
-    b32 out_ok = true;
-    kg_mutex_lock(&p->work_mutex);
-    kg_task_t task = (kg_task_t){
-        .fn = fn,
-        .arg = arg,
-    };
-    out_ok = kg_queue_enqueue(&p->task_queue, &task);
-    kg_cond_signal(&p->work_cond);
-    kg_mutex_unlock(&p->work_mutex);
+    b32 out_ok = false;
+    if (p && fn && arg) {
+        kg_mutex_lock(&p->work_mutex);
+        kg_task_t task = (kg_task_t){
+            .fn = fn,
+            .arg = arg,
+        };
+        out_ok = kg_queue_enqueue(&p->task_queue, &task);
+        kg_cond_signal(&p->work_cond);
+        kg_mutex_unlock(&p->work_mutex);
+    }
     return out_ok;
 }
 b32 kg_pool_join(kg_pool_t* p) {
@@ -1888,19 +1956,24 @@ b32 kg_pool_join(kg_pool_t* p) {
     return out_ok;
 }
 void kg_pool_destroy(kg_pool_t* p) {
-    kg_mutex_lock(&p->work_mutex);
-    p->stop = true;
-    kg_cond_broadcast(&p->work_cond);
-    kg_mutex_unlock(&p->work_mutex);
-    kg_pool_join(p);
-    kg_mutex_destroy(&p->work_mutex);
-    kg_cond_destroy(&p->work_cond);
-    kg_cond_destroy(&p->working_cond);
-    for (isize i = 0; i < p->workers_n; i++) {
-        kg_thread_destroy(&p->workers[i]);
+    if (p) {
+        kg_mutex_lock(&p->work_mutex);
+        p->stop = true;
+        kg_cond_broadcast(&p->work_cond);
+        kg_mutex_unlock(&p->work_mutex);
+        kg_pool_join(p);
+        kg_mutex_destroy(&p->work_mutex);
+        kg_cond_destroy(&p->work_cond);
+        kg_cond_destroy(&p->working_cond);
+        for (isize i = 0; i < p->workers_n; i++) {
+            kg_thread_destroy(&p->workers[i]);
+        }
+        kg_queue_destroy(&p->task_queue);
+        if (p->workers) {
+            kg_allocator_free(p->allocator, p->workers, kg_sizeof(kg_thread_t) * p->workers_n);
+        }
+        kg_mem_zero(p, kg_sizeof(kg_pool_t));
     }
-    kg_queue_destroy(&p->task_queue);
-    kg_allocator_free(p->allocator, p->workers, kg_sizeof(kg_thread_t) * p->workers_n);
 }
 
 #endif // KG_THREADS_IMPL
@@ -1949,11 +2022,11 @@ typedef struct kg_flag_t {
 
 #define KG_FLAGS_MAX_LEN 128
 
-static kg_flag_t kg_flags[KG_FLAGS_MAX_LEN];
-static isize     kg_flags_len = 0;
+kg_static kg_flag_t kg_flags[KG_FLAGS_MAX_LEN];
+kg_static isize     kg_flags_len = 0;
 
 const char* kg_flag_kind_to_cstr(kg_flag_kind_t k) {
-    static const char* kind_cstrs[] = {
+    kg_static const char* kind_cstrs[] = {
         [KG_FLAG_KIND_STR] = "str",
         [KG_FLAG_KIND_B32] = "b32",
         [KG_FLAG_KIND_U64] = "u64",
@@ -2064,6 +2137,7 @@ void kg_flags_parse(i32 argc, char* argv[]) {
             arg_str = kg_str_substr(arg_str, arg_prefix.len, arg_str.len);
             kg_str_t name = kg_str_chop_first_split_by(&arg_str, arg_split);
             kg_str_t value = arg_str;
+            kg_assert(arg_metas_len < KG_FLAGS_MAX_LEN);
             arg_metas[arg_metas_len++] = (kg_arg_meta_t){
                 .name  = name,
                 .value = value,
@@ -2178,7 +2252,7 @@ void kg_log_handler  (kg_log_level_t level, const char* file, i64 line, const ch
 #ifdef KG_LOGGER_IMPL
 
 #ifdef KG_THREADS
-static kg_logger_internals_t kg_logger_internals;
+kg_static kg_logger_internals_t kg_logger_internals;
 #endif
 void kg_logger_create(void) {
 #ifdef KG_THREADS
@@ -2191,7 +2265,7 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
 #endif
     kg_cast(void)file;
     kg_cast(void)line;
-    static const char* level_cstrs[KG_LOG_LEVEL__SENTINEL] = {
+    kg_static const char* level_cstrs[KG_LOG_LEVEL__SENTINEL] = {
         [KG_LOG_LEVEL_RAW]   = "",
         [KG_LOG_LEVEL_TRACE] = "[trace]",
         [KG_LOG_LEVEL_DEBUG] = "[debug]",
@@ -2199,6 +2273,15 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
         [KG_LOG_LEVEL_WARN]  = "[warn ]",
         [KG_LOG_LEVEL_ERROR] = "[error]",
         [KG_LOG_LEVEL_FATAL] = "[fatal]",
+    };
+    static const char *level_colors[] = {
+        [KG_LOG_LEVEL_RAW]   = "",
+        [KG_LOG_LEVEL_TRACE] = "\x1b[94m",
+        [KG_LOG_LEVEL_DEBUG] = "\x1b[36m",
+        [KG_LOG_LEVEL_INFO]  = "\x1b[32m",
+        [KG_LOG_LEVEL_WARN]  = "\x1b[33m",
+        [KG_LOG_LEVEL_ERROR] = "\x1b[31m",
+        [KG_LOG_LEVEL_FATAL] = "\x1b[35m",
     };
     kg_allocator_t allocator = kg_allocator_default();
     kg_string_builder_t sb;
@@ -2208,7 +2291,10 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
             kg_datetime_t datetime = kg_time_to_datetime(time);
             char datetime_cstr[DATETIME_MAX_CHARS_LEN] = {0};
             if (kg_datetime_to_cstr(datetime_cstr, datetime) > 0) {
-                kg_string_builder_write_fmt(&sb, "%s %s ", datetime_cstr, level_cstrs[level]);
+                kg_string_builder_write_fmt(&sb, "\x1b[90m%s\x1b[0m %s%s \x1b[0m", 
+                                            datetime_cstr, 
+                                            level_colors[level],
+                                            level_cstrs[level]);
             }
         } 
         va_list args;

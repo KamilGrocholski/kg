@@ -5,6 +5,14 @@
 #define KG_THREADS_IMPL
 #include "kg.h"
 
+void test_allocator_default() {
+    kg_allocator_t allocator = kg_allocator_default();
+    isize arr_len = 10;
+    isize* arr = kg_allocator_alloc_array(&allocator, isize, arr_len);
+    kgt_expect_not_null(arr);
+    kg_allocator_free(&allocator, arr, arr_len * kg_sizeof(isize));
+}
+
 void test_mem_swap() {
     isize a = 1234;
     isize b = 2345;
@@ -279,11 +287,11 @@ void test_pool() {
     isize iter = 120;
     test_pool_task_st_ st = (test_pool_task_st_){.value = 0};
     kg_mutex_create(&st.mutex);
-    kg_pool_create(&p, &allocator, n);
+    kgt_expect_true(kg_pool_create(&p, &allocator, n));
     for (isize i = 0; i < iter; i++) {
-        kg_pool_add_task(&p, test_pool_task_, &st);
+       kgt_expect_true(kg_pool_add_task(&p, test_pool_task_, &st));
     }
-    kg_pool_join(&p);
+    kgt_expect_true(kg_pool_join(&p));
     kg_mutex_destroy(&st.mutex);
     kgt_expect_eq(st.value, iter);
     kg_pool_destroy(&p);
@@ -387,6 +395,7 @@ int main() {
     kgt_create(&t);
 
     kgt_test_t tests[] = {
+        kgt_register(test_allocator_default),
         kgt_register(test_mem_swap),
         kgt_register(test_file_read_contant),
         kgt_register(test_string_from_cstr),

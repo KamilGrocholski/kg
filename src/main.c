@@ -7,6 +7,27 @@
 #define KG_FLAGS_IMPL
 #include "kg.h"
 
+typedef struct task_data_t {
+    kg_mutex_t mutex;
+    isize      value;
+} task_data_t;
+
+void* task_with_mutex(void* arg) {
+    task_data_t* d = kg_cast(task_data_t*)arg;
+    kg_mutex_lock(&d->mutex);
+    (d->value)++;
+    kg_log("task_data.value: %li", d->value);
+    kg_mutex_unlock(&d->mutex);
+    return null;
+}
+
+void* task_without_mutex(void* arg) {
+    task_data_t* d = kg_cast(task_data_t*)arg;
+    (d->value)++;
+    kg_log("task_data.value: %li", d->value);
+    return null;
+}
+
 i32 main(i32 argc, char* argv[]) {
     kg_logger_create();
 
@@ -30,10 +51,44 @@ i32 main(i32 argc, char* argv[]) {
     }
 
     kg_log_info("str_flag: %.*s", str_flag.len, str_flag.ptr);
-    kg_time_sleep(kg_duration_from_milliseconds(1000));
+    kg_time_sleep(kg_duration_from_milliseconds(250));
     kg_log_info("b32_flag: %s", b32_flag ? "true" : "false");
     kg_log_info("u64_flag: %lu", u64_flag);
     kg_log_info("i64_flag: %li", i64_flag);
+
+    kg_allocator_t allocator = kg_allocator_default();
+
+    kg_pool_t p;
+    isize workers = 5;
+    task_data_t task_data = {.value = 0};
+    kg_mutex_create(&task_data.mutex);
+    kg_pool_create(&p, &allocator, workers);
+
+    for (isize i = 0; i < workers; i++) {
+        kg_pool_add_task(&p, task_with_mutex, &task_data);
+    }
+    kg_pool_join(&p);
+    kg_log("final value with mutex: %li", task_data.value);
+
+    task_data.value = 0;
+
+    for (isize i = 0; i < workers; i++) {
+        kg_pool_add_task(&p, task_without_mutex, &task_data);
+    }
+    kg_pool_join(&p);
+    kg_log("final value without mutex: %li", task_data.value);
+
+    kg_pool_destroy(&p);
+    kg_mutex_destroy(&task_data.mutex);
+
+    kg_log("RAW");
+    kg_log_trace("TRACE");
+    kg_log_debug("DEBUG");
+    kg_log_info("INFO");
+    kg_log_warn("WARN");
+    kg_log_error("ERROR");
+    kg_log_fatal("FATAL");
+
 
     return 0;
 }
