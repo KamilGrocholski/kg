@@ -65,6 +65,116 @@ void test_string_append_fmt() {
     kg_string_destroy(string);
 }
 
+void test_string_compare() {
+    kg_allocator_t allocator = kg_allocator_default();
+    kg_string_t a;
+    kg_string_t b;
+    i32 result;
+
+    a = kg_string_from_cstr(&allocator, "testaa");
+    b = kg_string_from_cstr(&allocator, "test");
+    result = kg_string_compare(a, b);
+    kgt_expect_eq(result, 2);
+    kg_string_destroy(a);
+    kg_string_destroy(b);
+    a = null;
+    b = null;
+
+    a = kg_string_from_cstr(&allocator, "test");
+    b = kg_string_from_cstr(&allocator, "testaa");
+    result = kg_string_compare(a, b);
+    kgt_expect_eq(result, -2);
+    kg_string_destroy(a);
+    kg_string_destroy(b);
+    a = null;
+    b = null;
+
+    a = kg_string_from_cstr(&allocator, "test");
+    b = kg_string_from_cstr(&allocator, "test");
+    result = kg_string_compare(a, b);
+    kgt_expect_eq(result, 0);
+    kg_string_destroy(a);
+    kg_string_destroy(b);
+    a = null;
+    b = null;
+}
+
+void test_string_compare_n() {
+    kg_allocator_t allocator = kg_allocator_default();
+    kg_string_t a;
+    kg_string_t b;
+    i32 result;
+
+    a = kg_string_from_cstr(&allocator, "testaa");
+    b = kg_string_from_cstr(&allocator, "test");
+    result = kg_string_compare_n(a, b, 5);
+    kgt_expect_eq(result, 2);
+    kg_string_destroy(a);
+    kg_string_destroy(b);
+    a = null;
+    b = null;
+
+    a = kg_string_from_cstr(&allocator, "test");
+    b = kg_string_from_cstr(&allocator, "testaa");
+    result = kg_string_compare_n(a, b, 5);
+    kgt_expect_eq(result, -2);
+    kg_string_destroy(a);
+    kg_string_destroy(b);
+    a = null;
+    b = null;
+
+    a = kg_string_from_cstr(&allocator, "test");
+    b = kg_string_from_cstr(&allocator, "test");
+    result = kg_string_compare_n(a, b, 4);
+    kgt_expect_eq(result, 0);
+    kg_string_destroy(a);
+    kg_string_destroy(b);
+    a = null;
+    b = null;
+}
+
+void test_str_compare() {
+    kg_str_t a;
+    kg_str_t b;
+    i32 result;
+
+    a = kg_str_create("testaa");
+    b = kg_str_create("test");
+    result = kg_str_compare(a, b);
+    kgt_expect_eq(result, 2);
+
+    a = kg_str_create("test");
+    b = kg_str_create("testaa");
+    result = kg_str_compare(a, b);
+    kgt_expect_eq(result, -2);
+
+    a = kg_str_create("test");
+    b = kg_str_create("test");
+    result = kg_str_compare(a, b);
+    kgt_expect_eq(result, 0);
+}
+
+void test_str_compare_n() {
+    kg_str_t a;
+    kg_str_t b;
+    i32 result;
+
+    a = kg_str_create("testaa");
+    b = kg_str_create("test");
+    result = kg_str_compare_n(a, b, 5);
+    kgt_expect_eq(result, 2);
+
+    a = kg_str_create("test");
+    b = kg_str_create("testaa");
+    result = kg_str_compare_n(a, b, 5);
+    kgt_expect_eq(result, -2);
+
+    a = kg_str_create("test");
+    b = kg_str_create("test");
+    result = kg_str_compare_n(a, b, 4);
+    kgt_expect_eq(result, 0);
+}
+
 void test_str_is_equal() {
     kg_str_t a = kg_str_create("testA");
     kg_str_t b = kg_str_create("testA");
@@ -89,6 +199,13 @@ void test_str_has_prefix() {
     kg_str_t a = kg_str_create("AtestAtest");
     kg_str_t b = kg_str_create("A");
     kgt_expect_true(kg_str_has_prefix(a, b));
+}
+
+void test_str_trim_space() {
+    kg_str_t a = kg_str_create("\n \f\t\r\v test \n \t\r\v\f");
+    kg_str_t c = kg_str_trim_space(a);
+    kgt_expect_eq(c.len, 4);
+    kgt_expect_cstr_n_eq(c.ptr, "test", 4);
 }
 
 void test_str_trim_prefix() {
@@ -402,10 +519,15 @@ int main() {
         kgt_register(test_string_from_fmt),
         kgt_register(test_string_append_cstr),
         kgt_register(test_string_append_fmt),
+        kgt_register(test_string_compare),
+        kgt_register(test_string_compare_n),
+        kgt_register(test_str_compare),
+        kgt_register(test_str_compare_n),
         kgt_register(test_str_is_equal),
         kgt_register(test_str_index),
         kgt_register(test_str_contains),
         kgt_register(test_str_has_prefix),
+        kgt_register(test_str_trim_space),
         kgt_register(test_str_trim_prefix),
         kgt_register(test_str_has_suffix),
         kgt_register(test_str_trim_suffix),

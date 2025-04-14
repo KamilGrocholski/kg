@@ -89,6 +89,5 @@ i32 main(i32 argc, char* argv[]) {
     kg_log_error("ERROR");
     kg_log_fatal("FATAL");
 
-
     return 0;
 }

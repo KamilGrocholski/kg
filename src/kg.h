@@ -85,7 +85,7 @@ typedef ptrdiff_t isize;
 #define kg_kibibytes(x) (            (x) * (i64)1024)
 #define kg_mebibytes(x) (kg_kibibytes(x) * (i64)1024)
 #define kg_gibibytes(x) (kg_mebibytes(x) * (i64)1024)
-#define kg_tibibytes(x) (kg_gibibytes(x) * (i64)1024)
+#define kg_tebibytes(x) (kg_gibibytes(x) * (i64)1024)
 
 #define kg_kilobytes(x) (            (x) * (i64)1000)
 #define kg_megabytes(x) (kg_kilobytes(x) * (i64)1000)
@@ -100,7 +100,7 @@ typedef ptrdiff_t isize;
 
 void kg_exit(i32 code);
 
-void kg_printf(const char* fmt, ...);
+void kg_printf  (const char* fmt, ...);
 
 void kg_assert_handler(const char* prefix, const char* condition, const char* file, isize line, const char* fmt, ...);
 
@@ -165,6 +165,9 @@ typedef i32 (*kg_compare_fn_t)(const void* a, const void* b, isize size);
 
 void kg_quicksort(void* src, isize lo, isize hi, isize stride, kg_compare_fn_t compare_fn);
 
+i32 kg_cstr_compare  (const char* a, const char* b);
+i32 kg_cstr_compare_n(const char* a, const char* b, isize n);
+
 typedef struct kg_string_header_t {
     isize           len;
     isize           cap;
@@ -195,6 +198,8 @@ b32         kg_string_is_valid        (const kg_string_t s);
 b32         kg_string_is_equal        (const kg_string_t s, const kg_string_t other);
 b32         kg_string_is_equal_cstr   (const kg_string_t s, const char* cstr);
 b32         kg_string_is_empty        (const kg_string_t s);
+i32         kg_string_compare         (const kg_string_t s, const kg_string_t other);
+i32         kg_string_compare_n       (const kg_string_t s, const kg_string_t other, isize n);
 void        kg_string_destroy         (kg_string_t s);
 
 typedef struct kg_str_t {
@@ -214,6 +219,8 @@ kg_str_t kg_str_substr             (const kg_str_t s, isize start_inc, isize end
 kg_str_t kg_str_substr_from        (const kg_str_t s, isize start_inc);
 kg_str_t kg_str_substr_to          (const kg_str_t s, isize end_exc);
 kg_str_t kg_str_trim_space         (const kg_str_t s);
+kg_str_t kg_str_trim_space_left    (const kg_str_t s);
+kg_str_t kg_str_trim_space_right   (const kg_str_t s);
 kg_str_t kg_str_trim_prefix        (const kg_str_t s, const kg_str_t prefix);
 kg_str_t kg_str_trim_suffix        (const kg_str_t s, const kg_str_t suffix);
 b32      kg_str_is_empty           (const kg_str_t s);
@@ -226,6 +233,8 @@ b32      kg_str_has_prefix         (const kg_str_t s, const kg_str_t prefix);
 b32      kg_str_has_suffix         (const kg_str_t s, const kg_str_t suffix);
 isize    kg_str_index              (const kg_str_t s, const kg_str_t needle);
 isize    kg_str_index_char         (const kg_str_t s, char needle);
+i32      kg_str_compare            (const kg_str_t s, const kg_str_t other);
+i32      kg_str_compare_n          (const kg_str_t s, const kg_str_t other, isize n);
 
 b32 kg_str_to_b32(b32* b, const kg_str_t s);
 b32 kg_str_to_u64(u64* u, const kg_str_t s);
@@ -646,6 +655,13 @@ void kg_quicksort(void* src, isize start_inc, isize end_exc, isize stride, kg_co
     }
 }
 
+i32 kg_cstr_compare(const char* a, const char* b) {
+    return strncmp(a, b, ISIZE_MAX);
+}
+i32 kg_cstr_compare_n(const char* a, const char* b, isize n) {
+    return strncmp(a, b, n);
+}
+
 kg_string_t kg_string_create(kg_allocator_t* a, isize cap) {
     kg_string_t out_string = null;
     isize mem_size = kg_sizeof(kg_string_header_t) + cap + 1;
@@ -837,25 +853,33 @@ kg_inline b32 kg_string_is_valid(const kg_string_t s) {
     return out_ok;
 }
 kg_inline b32 kg_string_is_equal(const kg_string_t s, const kg_string_t other) {
-    b32 out_ok = false;
-    if (s && other) {
-        kg_str_t s_str = (kg_str_t){.len = kg_string_len(s), .ptr = s};
-        kg_str_t other_str = (kg_str_t){.len = kg_string_len(other), .ptr = other};
-        out_ok = kg_str_is_equal(s_str, other_str);
-    }
-    return out_ok;
+    return kg_string_compare(s, other) == 0;
 }
 kg_inline b32 kg_string_is_equal_cstr(const kg_string_t s, const char* cstr) {
-    b32 out_ok = false;
-    if (s && cstr) {
-        kg_str_t s_str = (kg_str_t){.len = kg_string_len(s), .ptr = s};
-        kg_str_t cstr_str = kg_str_create(cstr);
-        out_ok = kg_str_is_equal(s_str, cstr_str);
-    }
-    return out_ok;
+    return kg_cstr_compare(s, cstr) == 0;
 }
 kg_inline b32 kg_string_is_empty(const kg_string_t s) {
     return kg_string_len(s) == 0;
+}
+kg_inline i32 kg_string_compare(const kg_string_t s, const kg_string_t other) {
+    isize s_len = kg_string_len(s);
+    isize other_len = kg_string_len(other);
+    i32 out = s_len - other_len;
+    if (out == 0) {
+        out = kg_cstr_compare_n(s, other, s_len);
+    }
+    return out;
+}
+kg_inline i32 kg_string_compare_n(const kg_string_t s, const kg_string_t other, isize n) {
+    i32 out;
+    isize s_len = kg_string_len(s);
+    isize other_len = kg_string_len(other);
+    if (s_len >= n && other_len >= n) {
+        out = kg_cstr_compare_n(s, other, n);
+    } else {
+        out = s_len - other_len;
+    }
+    return out;
 }
 void kg_string_destroy(kg_string_t s) {
     if (s) {
@@ -865,7 +889,7 @@ void kg_string_destroy(kg_string_t s) {
     }
 }
 
-kg_inline kg_str_t kg_str_create(const char* cstr) {
+kg_inline kg_inline kg_str_t kg_str_create(const char* cstr) {
     kg_str_t out_str = (kg_str_t){0};
     if (cstr) {
         out_str.len = strnlen(cstr, ISIZE_MAX);
@@ -873,7 +897,7 @@ kg_inline kg_str_t kg_str_create(const char* cstr) {
     }
     return out_str;
 }
-kg_str_t kg_str_create_n(const char* cstr, isize len) {
+kg_inline kg_str_t kg_str_create_n(const char* cstr, isize len) {
     kg_str_t out_str = (kg_str_t){0};
     if (cstr && len > 0) {
         out_str.len = len;
@@ -881,10 +905,10 @@ kg_str_t kg_str_create_n(const char* cstr, isize len) {
     }
     return out_str;
 }
-kg_str_t kg_str_from_string(const kg_string_t s) {
+kg_inline kg_str_t kg_str_from_string(const kg_string_t s) {
     return (kg_str_t){.len = kg_string_len(s), .ptr = s};
 }
-kg_str_t kg_str_from_string_n(const kg_string_t s, isize len) {
+kg_inline kg_str_t kg_str_from_string_n(const kg_string_t s, isize len) {
     isize string_len = kg_string_len(s);
     return (kg_str_t){.len = len > string_len ? string_len : len, .ptr = s};
 }
@@ -915,17 +939,35 @@ kg_inline kg_str_t kg_str_substr(const kg_str_t s, isize start_inc, isize end_ex
     }
     return out;
 }
-kg_str_t kg_str_substr_from(const kg_str_t s, isize start_inc) {
+kg_inline kg_str_t kg_str_substr_from(const kg_str_t s, isize start_inc) {
     return kg_str_substr(s, start_inc, s.len);
 }
-kg_str_t kg_str_substr_to(const kg_str_t s, isize end_exc) {
+kg_inline kg_str_t kg_str_substr_to(const kg_str_t s, isize end_exc) {
     return kg_str_substr(s, 0, end_exc);
 }
-kg_str_t kg_str_trim_space(const kg_str_t s) {
+kg_inline kg_str_t kg_str_trim_space(const kg_str_t s) {
+    return kg_str_trim_space_left(kg_str_trim_space_right(s));
+}
+kg_inline kg_str_t kg_str_trim_space_left(const kg_str_t s) {
     kg_str_t out = s;
     if (out.ptr && out.len > 0) {
-        while(out.ptr) {
+        isize n = 0;
+        while(n < s.len && kg_char_is_space(out.ptr[n])) {
+            n++;
         }
+        out.ptr += n;
+        out.len -= n;
+    }
+    return out;
+}
+kg_inline kg_str_t kg_str_trim_space_right(const kg_str_t s) {
+    kg_str_t out = s;
+    if (out.ptr && out.len > 0) {
+        isize n = 0;
+        while(n < s.len && kg_char_is_space(out.ptr[s.len - n - 1])) {
+            n++;
+        }
+        out.len -= n;
     }
     return out;
 }
@@ -970,34 +1012,34 @@ kg_inline b32 kg_str_is_valid_cstr(const kg_str_t s) {
     return out_ok;
 }
 kg_inline b32 kg_str_is_equal(const kg_str_t s, const kg_str_t other) {
-    b32 out_ok = false;
-    if (s.len == other.len) {
-        out_ok = strncmp(s.ptr, other.ptr, s.len) == 0;
-    } 
-    return out_ok;
+    return kg_str_compare(s, other) == 0;
 }
 kg_inline b32 kg_str_contains(const kg_str_t s, const kg_str_t needle) {
     return kg_str_index(s, needle) >= 0;
 }
 kg_inline b32 kg_str_has_prefix(const kg_str_t s, const kg_str_t prefix) {
-    b32 out_ok = false;
+    b32 out;
     if (s.len >= prefix.len) {
-        out_ok = strncmp(s.ptr, prefix.ptr, prefix.len) == 0;
+        out = kg_cstr_compare_n(s.ptr, prefix.ptr, prefix.len) == 0;
+    } else {
+        out = false;
     }
-    return out_ok;
+    return out;
 }
 kg_inline b32 kg_str_has_suffix(const kg_str_t s, const kg_str_t suffix) {
-    b32 out_ok = false;
+    b32 out;
     if (s.len >= suffix.len) {
-        out_ok = strncmp(s.ptr + s.len - suffix.len, suffix.ptr, suffix.len) == 0;
+        out = kg_cstr_compare_n(s.ptr + s.len - suffix.len, suffix.ptr, suffix.len) == 0;
+    } else {
+        out = false;
     }
-    return out_ok;
+    return out;
 }
 isize kg_str_index(const kg_str_t s, const kg_str_t needle) {
     isize out_index = -1;
     if (s.len >= needle.len) {
         for (isize i = 0; i < s.len - needle.len + 1; i++) {
-            if (strncmp(s.ptr + i, needle.ptr, needle.len) == 0) {
+            if (kg_cstr_compare_n(s.ptr + i, needle.ptr, needle.len) == 0) {
                 out_index = i;
                 break;
             }
@@ -1014,6 +1056,22 @@ isize kg_str_index_char(const kg_str_t s, char needle) {
         }
     }
     return out_index;
+}
+kg_inline i32 kg_str_compare(const kg_str_t s, const kg_str_t other) {
+    i32 out = s.len - other.len;
+    if (out == 0) {
+        out = kg_cstr_compare_n(s.ptr, other.ptr, s.len);
+    }
+    return out;
+}
+kg_inline i32 kg_str_compare_n(const kg_str_t s, const kg_str_t other, isize n) {
+    i32 out;
+    if (s.len >= n && other.len >= n) {
+        out = kg_cstr_compare_n(s.ptr, other.ptr, n);
+    } else {
+        out = s.len - other.len;
+    }
+    return out;
 }
 
 #define KG_VALID_BOOL_STRS_MAP_LEN 5
@@ -2344,16 +2402,20 @@ void kgt_expect_handler(const char* cond, const char* msg, const char* file, isi
 #define kgt_expect_not_null(a)         kgt_expect(a != null, "expected not null")
 #define kgt_expect_eq(a, b)            kgt_expect(a == b, "expected eq")
 #define kgt_expect_neq(a, b)           kgt_expect(a != b, "expected neq")
+#define kgt_expect_lt(a, b)            kgt_expect(a < b, "expected lt")
+#define kgt_expect_lte(a, b)           kgt_expect(a <= b, "expected lte")
+#define kgt_expect_gt(a, b)            kgt_expect(a > b, "expected gt")
+#define kgt_expect_gte(a, b)           kgt_expect(a >= b, "expected gte")
 #define kgt_expect_ptr_eq(a, b)        kgt_expect(a == b, "expected ptr eq")
 #define kgt_expect_ptr_neq(a, b)       kgt_expect(a != b, "expected ptr neq")
 #define kgt_expect_true(a)             kgt_expect(a == true, "expected true")
 #define kgt_expect_false(a)            kgt_expect(a == false, "expected false")
 #define kgt_expect_mem_eq(a, b, s)     kgt_expect(kg_mem_compare(a, b, s) == 0, "expected memory eq")
 #define kgt_expect_mem_neq(a, c, s)    kgt_expect(kg_mem_compare(a, b, s) != 0, "expected memory neq")
-#define kgt_expect_cstr_eq(a, b)       kgt_expect(strcmp(a, b) == 0, "expected cstr eq")
-#define kgt_expect_cstr_neq(a, c)      kgt_expect(strcmp(a, b) != 0, "expected cstr neq")
-#define kgt_expect_cstr_n_eq(a, b, n)  kgt_expect(strncmp(a, b, n) == 0, "expected cstr n eq")
-#define kgt_expect_cstr_n_neq(a, c, n) kgt_expect(strncmp(a, b, n) != 0, "expected cstr n neq")
+#define kgt_expect_cstr_eq(a, b)       kgt_expect(kg_cstr_compare(a, b) == 0, "expected cstr eq")
+#define kgt_expect_cstr_neq(a, c)      kgt_expect(kg_cstr_compare(a, b) != 0, "expected cstr neq")
+#define kgt_expect_cstr_n_eq(a, b, n)  kgt_expect(kg_cstr_compare_n(a, b, n) == 0, "expected cstr n eq")
+#define kgt_expect_cstr_n_neq(a, c, n) kgt_expect(kg_cstr_compare_n(a, b, n) != 0, "expected cstr n neq")
 
 #endif // KG_TESTER
 
