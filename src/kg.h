@@ -249,9 +249,15 @@ kg_string_t kg_i64_to_string(kg_allocator_t* a, i64 i);
 isize       kg_f64_to_cstr  (char buf[F64_MAX_CHARS_LEN], f64 f);
 kg_string_t kg_f64_to_string(kg_allocator_t* a, f64 f);
 
-char kg_char_to_lower(char c);
-char kg_char_to_upper(char c);
-b32  kg_char_is_space(char c);
+char kg_char_to_lower       (char c);
+char kg_char_to_upper       (char c);
+b32  kg_char_is_space       (char c);
+b32  kg_char_is_digit       (char c);
+b32  kg_char_is_alpha       (char c);
+b32  kg_char_is_alphanumeric(char c);
+
+isize kg_utf8_decode_rune(rune* r, u8 b[4]);
+isize kg_utf8_encode_rune(u8 b[4], rune r);
 
 typedef struct kg_string_builder_t {
     kg_allocator_t* allocator;
@@ -655,10 +661,10 @@ void kg_quicksort(void* src, isize start_inc, isize end_exc, isize stride, kg_co
     }
 }
 
-i32 kg_cstr_compare(const char* a, const char* b) {
+kg_inline i32 kg_cstr_compare(const char* a, const char* b) {
     return strncmp(a, b, ISIZE_MAX);
 }
-i32 kg_cstr_compare_n(const char* a, const char* b, isize n) {
+kg_inline i32 kg_cstr_compare_n(const char* a, const char* b, isize n) {
     return strncmp(a, b, n);
 }
 
@@ -1206,6 +1212,100 @@ kg_inline b32 kg_char_is_alpha(char c) {
 }
 kg_inline b32 kg_char_is_alphanumeric(char c) {
     return kg_char_is_digit(c) || kg_char_is_alpha(c);
+}
+
+#define first_codepoint1 0x0000
+#define last_codepoint1  0x007f
+#define first_codepoint2 0x07ff
+#define last_codepoint2  0x0080
+#define first_codepoint3 0x0800
+#define last_codepoint3  0xffff
+#define first_codepoint4 0x010000
+#define last_codepoint4  0x10ffff
+#define tx kg_cast(rune)(0x0080)
+#define t1 kg_cast(rune)(0x0000)
+#define t2 kg_cast(rune)(0x00c0)
+#define t3 kg_cast(rune)(0x00e0)
+#define t4 kg_cast(rune)(0x00f0)
+#define maskx kg_cast(rune)(0x003f)
+#define mask1 kg_cast(rune)(0x0000)
+#define mask2 kg_cast(rune)(0x003f)
+#define mask3 kg_cast(rune)(0x001f)
+#define mask4 kg_cast(rune)(0x000f)
+#define runeerror kg_cast(rune)(0xfffd)
+
+// 0 - 0000
+// 1 - 0001
+// 2 - 0010
+// 3 - 0011
+// 4 - 0100
+// 5 - 0101
+// 6 - 0110
+// 7 - 0111
+// 8 - 1000
+// 9 - 1001
+// c - 1010
+// b - 1011
+// c - 1100
+// d - 1101
+// e - 1110
+// f - 1111
+
+isize kg_utf8_decode_rune(rune* r, u8 b[4]) {
+    kg_printf("kg_utf8_decode_rune implementing\n");
+    isize bytes;
+    if ((b[0] & t1) == t1) {
+        bytes = 1;
+        *r = runeerror;
+        // ...
+    } else if ((b[0] & t2) == t2) {
+        // decode('ś') = 0x15b
+        // encode('ś') = [0xc5 0x9b 0x00 0x00]
+        // b[0] = 1100 0101
+        // b[1] = 1001 1011
+        //
+        //    a = 1100 0101 - b[0]
+        //      & 0001 1111 - mask2
+        //      = 0000 0101 - b[0] & mask2
+        //   cast 0000 0000 0000 0000 0000 0000 0000 0101 - kg_cast(rune)(b[0] & mask2)
+        //   << 6 0000 0000 0000 0000 0000 0001 0100 0000 - shift left 6
+        //
+        //    b = 1001 1011 - b[1]
+        //      & 0011 1111 - maskx
+        //      = 0001 1011 - b[1] & maskx
+        //   cast 0000 0000 0000 0000 0000 0000 0001 1011 - kg_cast(rune)(b[1] & maskx)
+        //
+        //    r = 0000 0000 0000 0000 0000 0001 0100 0000
+        //      | 0000 0000 0000 0000 0000 0000 0001 1011 - a | b
+        //      = 0000 0000 0000 0000 0000 0001 0101 1011 - final result in hex: 0x15b
+        //
+        bytes = 2;
+        *r = (kg_cast(rune)(b[0] & mask2) << 6) 
+            | kg_cast(rune)(b[1] & maskx);
+    } else if ((b[0] & t3) == t3) {
+        bytes = 3;
+        *r = (kg_cast(rune)(b[0] & mask3) << 12) 
+            | (kg_cast(rune)(b[1] & maskx) << 6) 
+            | kg_cast(rune)(b[2] & maskx);
+    } else if ((b[0] & t4) == t4) {
+        bytes = 4;
+        *r = (kg_cast(rune)(b[0] & mask4) << 18) 
+            | (kg_cast(rune)(b[1] & mask4) << 12) 
+            | (kg_cast(rune)(b[2] & maskx) << 6) 
+            | kg_cast(rune)(b[3] & maskx);
+    } else {
+        bytes = 0;
+        *r = runeerror;
+    }
+    return bytes;
+}
+
+isize kg_utf8_encode_rune(u8 b[4], rune r) {
+    isize bytes = 0;
+    kg_cast(void)b;
+    kg_cast(void)r;
+    kg_panic("not implemented");
+    return bytes;
 }
 
 b32 kg_string_builder_create(kg_string_builder_t* b, kg_allocator_t* a, isize cap) {

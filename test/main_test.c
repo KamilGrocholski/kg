@@ -507,6 +507,42 @@ void test_string_builder() {
     kg_string_builder_destroy(&b);
 }
 
+void test_uft8() {
+    /*rune r_in = 0x015b;*/
+    /*rune r_in = 0x0041;*/
+    /*u8 buf[4] = {0};*/
+    /*isize bytes = kg_utf8_encode_rune(buf, r_in);*/
+    /*rune r_out = kg_utf8_decode_rune(buf);*/
+    /*kg_printf("r_in: %d, r_out: %d, bytes: %li, buf: '%s'\n", r_in, r_out, bytes, buf);*/
+    /*kg_printf("r_in: %d, r_out: %d, bytes: %li, buf: '%s'\n", r_in, r_out, bytes, buf);*/
+}
+
+void test_uft8_decode_rune() {
+    /*u8 buf[4] = {0x0041};*/
+    // 0xxx xxxx | 10xx xxxx | 10xx xxxx | 10xx xxxx
+    // 110x xxxx | 10xx xxxx | 10xx xxxx | 10xx xxxx
+    // 1110 xxxx | 10xx xxxx | 10xx xxxx | 10xx xxxx
+    // 1111 0xxx | 10xx xxxx | 10xx xxxx | 10xx xxxx
+    // rune('ś') = 0x 015b
+    // rune('ś') = 0b 0000 0000 | 0000 0000 | 0000 0001 | 0101 1011
+    //                                        11max 001 | 0101 1011
+    //                                        1100 0101 | 1001 1011
+    //                                        xxx0 0101 | xx01 1011
+    u8 buf[4] = {0x00c5, 0x009b};
+    rune r_out;
+    isize bytes = kg_utf8_decode_rune(&r_out, buf);
+    kg_printf("HEX | r_out: %x, bytes: %li, buf: [%x, %x, %x, %x]\n", r_out, bytes, buf[0], buf[1], buf[2], buf[3]);
+    /*kgt_expect_eq(r_out, 0x0041);*/
+    kgt_expect_eq(r_out, 0x015b);
+}
+
+void test_uft8_encode_rune() {
+    /*rune r_in = 0x0041;*/
+    /*u8 buf[4] = {0};*/
+    /*rune r_out = kg_utf8_decode_rune(buf);*/
+    /*kg_printf("r_in: %d, r_out: %d, buf: '%s'\n", r_in, r_out, buf);*/
+}
+
 int main() {
     kgt_t t;
     kgt_create(&t);
@@ -547,6 +583,9 @@ int main() {
         kgt_register(test_date),
         kgt_register(test_quicksort),
         kgt_register(test_string_builder),
+        kgt_register(test_uft8),
+        kgt_register(test_uft8_decode_rune),
+        kgt_register(test_uft8_encode_rune),
     }; 
     isize tests_len = kg_sizeof(tests) / kg_sizeof(kgt_test_t);
 
