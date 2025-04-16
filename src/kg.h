@@ -85,7 +85,8 @@ typedef ptrdiff_t isize;
 #define kg_max(x, y)           ((x) > (y) ? (x) : (y))
 #define kg_clamp(x, i, j)      kg_min(kg_max((x), (i)), (j))
 #define kg_abs(x)              ((x) < 0 ? -(x) : (x))
-#define kg_is_between(x, i, j) (((x) >= (i)) && ((x) <= (j)))
+#define kg_is_within(x, i, j)  (((x) >= (i)) && ((x) <= (j)))
+#define kg_is_between(x, i, j) (((x) > (i)) && ((x) < (j)))
 
 #define kg_kibibytes(x) (            (x) * (i64)1024)
 #define kg_mebibytes(x) (kg_kibibytes(x) * (i64)1024)
@@ -186,6 +187,7 @@ typedef struct kg_string_header_t {
 typedef char* kg_string_t;
 
 kg_string_t kg_string_create          (kg_allocator_t* a, isize cap);
+kg_string_t kg_string_from_unsafe     (kg_allocator_t* a, const void* v, isize v_len);
 kg_string_t kg_string_from_fmt        (kg_allocator_t* a, const char* fmt, ...);
 kg_string_t kg_string_from_fmt_v      (kg_allocator_t* a, const char* fmt, va_list args);
 kg_string_t kg_string_from_cstr       (kg_allocator_t* a, const char* cstr);
@@ -393,18 +395,18 @@ typedef struct kg_duration_t {
 } kg_duration_t;
 
 typedef enum kg_month_t {
-    January   = 1, 
-    February, 
-    March, 
-    April, 
-    May, 
-    June, 
-    July, 
-    August, 
-    September, 
-    October, 
-    November, 
-    December, 
+    KG_MONTH_JANUARY   = 1, 
+    KG_MONTH_FEBRUARY, 
+    KG_MONTH_MARCH, 
+    KG_MONTH_APRIL, 
+    KG_MONTH_MAY, 
+    KG_MONTH_JUNE, 
+    KG_MONTH_JULY, 
+    KG_MONTH_AUGUST, 
+    KG_MONTH_SEPTEMBER, 
+    KG_MONTH_OCTOBER, 
+    KG_MONTH_NOVEMBER, 
+    KG_MONTH_DECEMBER, 
 } kg_month_t;
 
 typedef struct kg_date_t {
@@ -695,6 +697,16 @@ kg_string_t kg_string_create(kg_allocator_t* a, isize cap) {
         h->allocator = a;
         h->cap = cap;
         out_string = kg_cast(kg_string_t)(h + 1);
+    }
+    return out_string;
+}
+kg_string_t kg_string_from_unsafe(kg_allocator_t* a, const void* v, isize v_len) {
+    kg_string_t out_string = kg_string_create(a, v_len);
+    if (out_string) {
+        kg_mem_copy(out_string, v, v_len);
+        kg_string_header_t* h = kg_string_header(out_string);
+        h->len = v_len;
+        out_string[v_len] = '\0';
     }
     return out_string;
 }
@@ -1256,7 +1268,7 @@ kg_inline b32 kg_char_is_alphanumeric(char c) {
 }
 
 kg_static kg_inline b32 kg_utf8_is_cont(u8 b) {
-    return kg_is_between(b, 0x80, 0xbf);
+    return kg_is_within(b, 0x80, 0xbf);
 }
 isize kg_utf8_decode_rune(rune* r, u8* b, isize b_len) {
     kg_printf("kg_utf8_decode_rune - not done\n");
@@ -1340,7 +1352,7 @@ kg_inline b32 kg_rune_is_valid(rune r) {
     return false;
 }
 kg_inline b32 kg_rune_is_digit(rune r) {
-    return kg_is_between(r, 0x0030, 0x0039);
+    return kg_is_within(r, 0x0030, 0x0039);
 }
 kg_inline b32 kg_rune_is_space(rune r) {
     switch(r) {
