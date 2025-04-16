@@ -517,30 +517,54 @@ void test_uft8() {
     /*kg_printf("r_in: %d, r_out: %d, bytes: %li, buf: '%s'\n", r_in, r_out, bytes, buf);*/
 }
 
-void test_uft8_decode_rune() {
-    /*u8 buf[4] = {0x0041};*/
-    // 0xxx xxxx | 10xx xxxx | 10xx xxxx | 10xx xxxx
-    // 110x xxxx | 10xx xxxx | 10xx xxxx | 10xx xxxx
-    // 1110 xxxx | 10xx xxxx | 10xx xxxx | 10xx xxxx
-    // 1111 0xxx | 10xx xxxx | 10xx xxxx | 10xx xxxx
-    // rune('ś') = 0x 015b
-    // rune('ś') = 0b 0000 0000 | 0000 0000 | 0000 0001 | 0101 1011
-    //                                        11max 001 | 0101 1011
-    //                                        1100 0101 | 1001 1011
-    //                                        xxx0 0101 | xx01 1011
-    u8 buf[4] = {0x00c5, 0x009b};
-    rune r_out;
-    isize bytes = kg_utf8_decode_rune(&r_out, buf);
-    kg_printf("HEX | r_out: %x, bytes: %li, buf: [%x, %x, %x, %x]\n", r_out, bytes, buf[0], buf[1], buf[2], buf[3]);
-    /*kgt_expect_eq(r_out, 0x0041);*/
-    kgt_expect_eq(r_out, 0x015b);
+void test_utf8_decode_rune() {
+    struct case_t {
+        rune expected_r;
+        isize expected_bytes;
+        u8 b[4];
+        isize blen;
+    };
+
+    struct case_t cases[] = {
+        { 0x61,       1, { 0x61, 0x00, 0x00, 0x00 }, 1 },           // 'a'
+        { 0x015b,     2, { 0xc5, 0x9b, 0x00, 0x00 }, 2 },           // 'ś'
+        { 0x20ac,     3, { 0xe2, 0x82, 0xac, 0x00 }, 3 },           // '€'
+        { 0x1f601,    4, { 0xf0, 0x9f, 0x98, 0x81 }, 4 },           // 😁
+        { KG_RUNE_INVALID, 0, { 0xc0, 0xaf, 0x00, 0x00 }, 2 },      // overlong encoding
+        { KG_RUNE_INVALID, 0, { 0xed, 0xa0, 0x80, 0x00 }, 3 },      // utf-16 surrogate
+        { KG_RUNE_INVALID, 0, { 0xf5, 0x80, 0x80, 0x80 }, 4 },      // beyond U+10FFFF
+        { KG_RUNE_INVALID, 0, { 0xe2, 0x28, 0xa1, 0x00 }, 3 },      // invalid 3-byte seq
+        { KG_RUNE_INVALID, 0, { 0x80, 0x00, 0x00, 0x00 }, 1 },      // lone continuation byte
+        { KG_RUNE_INVALID, 0, { 0xf0, 0x9f, 0x98, 0x00 }, 3 },      // incomplete 😁
+    };
+
+    for (isize i = 0; i < kg_sizeof(cases) / kg_sizeof(cases[0]); i++) {
+        rune r;
+        isize bytes = kg_utf8_decode_rune(&r, cases[i].b, cases[i].blen);
+
+        kgt_expect_eq(r, cases[i].expected_r);
+        kgt_expect_eq(bytes, cases[i].expected_bytes);
+
+        if (cases[i].expected_bytes > 0) {
+            kgt_expect_true(kg_rune_is_valid(r));
+        } else {
+            kgt_expect_false(kg_rune_is_valid(r));
+        }
+    }
 }
 
 void test_uft8_encode_rune() {
-    /*rune r_in = 0x0041;*/
-    /*u8 buf[4] = {0};*/
-    /*rune r_out = kg_utf8_decode_rune(buf);*/
-    /*kg_printf("r_in: %d, r_out: %d, buf: '%s'\n", r_in, r_out, buf);*/
+}
+
+void test_string_append_rune() {
+    kg_allocator_t allocator = kg_allocator_default();
+    kg_string_t s = kg_string_create(&allocator, 0);
+    kgt_expect_not_null(s);
+    rune r = 0x15b;
+    s = kg_string_append_rune(s, r);
+    kgt_expect_not_null(s);
+    kgt_expect_mem_eq(s, "\xc5\x9b", 2);
+    kg_string_destroy(s);
 }
 
 int main() {
@@ -584,8 +608,9 @@ int main() {
         kgt_register(test_quicksort),
         kgt_register(test_string_builder),
         kgt_register(test_uft8),
-        kgt_register(test_uft8_decode_rune),
+        kgt_register(test_utf8_decode_rune),
         kgt_register(test_uft8_encode_rune),
+        kgt_register(test_string_append_rune),
     }; 
     isize tests_len = kg_sizeof(tests) / kg_sizeof(kgt_test_t);
 

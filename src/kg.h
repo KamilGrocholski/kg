@@ -70,6 +70,11 @@ typedef ptrdiff_t isize;
 #define kg_inline        inline
 #define kg_extern        extern
 
+#define KG_RUNE_INVALID       kg_cast(rune)(0xfffd)
+#define KG_RUNE_MAX           kg_cast(rune)(0x0010ffff)
+#define KG_RUNE_SURROGATE_MIN kg_cast(rune)(0xd800)
+#define KG_RUNE_SURROGATE_MAX kg_cast(rune)(0xdfff)
+
 #define kg_bit(x) (1<<(x))
 #define kg_mask_set(var, set, mask) do { \
     if (set) (var) |=  (mask); \
@@ -100,7 +105,7 @@ typedef ptrdiff_t isize;
 
 void kg_exit(i32 code);
 
-void kg_printf  (const char* fmt, ...);
+void kg_printf(const char* fmt, ...);
 
 void kg_assert_handler(const char* prefix, const char* condition, const char* file, isize line, const char* fmt, ...);
 
@@ -165,8 +170,10 @@ typedef i32 (*kg_compare_fn_t)(const void* a, const void* b, isize size);
 
 void kg_quicksort(void* src, isize lo, isize hi, isize stride, kg_compare_fn_t compare_fn);
 
-i32 kg_cstr_compare  (const char* a, const char* b);
-i32 kg_cstr_compare_n(const char* a, const char* b, isize n);
+i32   kg_cstr_compare  (const char* a, const char* b);
+i32   kg_cstr_compare_n(const char* a, const char* b, isize n);
+isize kg_cstr_len      (const char* c);
+isize kg_cstr_len_n    (const char* c, isize n);
 
 typedef struct kg_string_header_t {
     isize           len;
@@ -184,8 +191,11 @@ kg_string_t kg_string_from_fmt_v      (kg_allocator_t* a, const char* fmt, va_li
 kg_string_t kg_string_from_cstr       (kg_allocator_t* a, const char* cstr);
 kg_string_t kg_string_from_cstr_n     (kg_allocator_t* a, const char* cstr, isize cstr_len);
 kg_string_t kg_string_append          (kg_string_t s, kg_string_t other);
+kg_string_t kg_string_append_unsafe   (kg_string_t s, const void* v, isize v_len);
 kg_string_t kg_string_append_fmt      (kg_string_t s, const char* fmt, ...);
 kg_string_t kg_string_append_fmt_v    (kg_string_t s, const char* fmt, va_list args);
+kg_string_t kg_string_append_char     (kg_string_t s, char c);
+kg_string_t kg_string_append_rune     (kg_string_t s, rune r);
 kg_string_t kg_string_append_cstr     (kg_string_t s, const char* cstr);
 kg_string_t kg_string_append_cstr_n   (kg_string_t s, const char* cstr, isize cstr_len);
 kg_string_t kg_string_grow            (kg_string_t s, isize n);
@@ -207,11 +217,10 @@ typedef struct kg_str_t {
     const char* ptr;
 } kg_str_t;
 
-#define kg_str_create_empty() ((kg_str_t){.len = 0, .ptr = ""})
-#define kg_str_create_null()  ((kg_str_t){.len = 0, .ptr = null})
-
 kg_str_t kg_str_create             (const char* cstr);
 kg_str_t kg_str_create_n           (const char* cstr, isize cstr_len);
+kg_str_t kg_str_create_empty       (void);
+kg_str_t kg_str_create_null        (void);
 kg_str_t kg_str_from_string        (const kg_string_t s);
 kg_str_t kg_str_from_string_n      (const kg_string_t s, isize len);
 kg_str_t kg_str_chop_first_split_by(kg_str_t* s, const kg_str_t split_by);
@@ -256,7 +265,10 @@ b32  kg_char_is_digit       (char c);
 b32  kg_char_is_alpha       (char c);
 b32  kg_char_is_alphanumeric(char c);
 
-isize kg_utf8_decode_rune(rune* r, u8 b[4]);
+b32   kg_rune_is_valid   (rune r);
+b32   kg_rune_is_digit   (rune r);
+b32   kg_rune_is_space   (rune r);
+isize kg_utf8_decode_rune(rune* r, u8* b, isize b_len);
 isize kg_utf8_encode_rune(u8 b[4], rune r);
 
 typedef struct kg_string_builder_t {
@@ -268,7 +280,7 @@ typedef struct kg_string_builder_t {
 } kg_string_builder_t;
 
 b32         kg_string_builder_create          (kg_string_builder_t* b, kg_allocator_t* a, isize cap);
-b32         kg_string_builder_write_unsafe    (kg_string_builder_t* b, const char* cstr, isize n);
+b32         kg_string_builder_write_unsafe    (kg_string_builder_t* b, const void* v, isize n);
 b32         kg_string_builder_write_u64       (kg_string_builder_t* b, u64 u);
 b32         kg_string_builder_write_i64       (kg_string_builder_t* b, i64 i);
 b32         kg_string_builder_write_f64       (kg_string_builder_t* b, f64 f);
@@ -667,6 +679,12 @@ kg_inline i32 kg_cstr_compare(const char* a, const char* b) {
 kg_inline i32 kg_cstr_compare_n(const char* a, const char* b, isize n) {
     return strncmp(a, b, n);
 }
+kg_inline isize kg_cstr_len(const char* c) {
+    return kg_cast(isize)strnlen(c, ISIZE_MAX);
+}
+kg_inline isize kg_cstr_len_n(const char* c, isize n) {
+    return kg_cast(isize)strnlen(c, n);
+}
 
 kg_string_t kg_string_create(kg_allocator_t* a, isize cap) {
     kg_string_t out_string = null;
@@ -711,7 +729,7 @@ kg_string_t kg_string_from_fmt_v(kg_allocator_t* a, const char* fmt, va_list arg
     return out_string;
 }
 kg_string_t kg_string_from_cstr(kg_allocator_t* a, const char* cstr) {
-    return kg_string_from_cstr_n(a, cstr, strnlen(cstr, ISIZE_MAX));
+    return kg_string_from_cstr_n(a, cstr, kg_cstr_len(cstr));
 }
 kg_string_t kg_string_from_cstr_n(kg_allocator_t* a, const char* cstr, isize cstr_len) {
     kg_string_t out_string = null;
@@ -740,6 +758,17 @@ kg_string_t kg_string_append(kg_string_t s, kg_string_t other) {
             kg_mem_copy(out_string, other, other_h->len);
             out_string[s_h->len] = '\0';
         }
+    }
+    return out_string;
+}
+kg_string_t kg_string_append_unsafe(kg_string_t s, const void* v, isize v_len) {
+    kg_string_t out_string = null;
+    kg_string_header_t* s_h = kg_string_header(s);
+    out_string = kg_string_ensure_available(s, v_len);
+    if (out_string) {
+        s_h->len += v_len;
+        kg_mem_copy(out_string, v, v_len);
+        out_string[s_h->len] = '\0';
     }
     return out_string;
 }
@@ -774,8 +803,18 @@ kg_string_t kg_string_append_fmt_v(kg_string_t s, const char* fmt, va_list args)
     }
     return out_string;
 }
+kg_inline kg_string_t kg_string_append_char(kg_string_t s, char c) {
+    return kg_string_append_unsafe(s, &c, 1);
+}
+kg_inline kg_string_t kg_string_append_rune(kg_string_t s, rune r) {
+    kg_string_t out = s;
+    u8 buf[8] = {0};
+    isize len = kg_utf8_encode_rune(buf, r);
+    out = kg_string_append_unsafe(s, buf, len);
+    return out;
+}
 kg_string_t kg_string_append_cstr(kg_string_t s, const char* cstr) {
-    return kg_string_append_cstr_n(s, cstr, strnlen(cstr, ISIZE_MAX));
+    return kg_string_append_cstr_n(s, cstr, kg_cstr_len(cstr));
 }
 kg_string_t kg_string_append_cstr_n(kg_string_t s, const char* cstr, isize cstr_len) {
     kg_string_t out_string = null;
@@ -854,7 +893,7 @@ kg_inline b32 kg_string_is_valid(const kg_string_t s) {
     b32 out_ok = false;
     if (s) {
         kg_string_header_t* h = kg_string_header(s);
-        out_ok = kg_cast(isize)strnlen(s, h->len + 1) == h->len;
+        out_ok = kg_cstr_len_n(s, h->len + 1) == h->len;
     }
     return out_ok;
 }
@@ -898,7 +937,7 @@ void kg_string_destroy(kg_string_t s) {
 kg_inline kg_inline kg_str_t kg_str_create(const char* cstr) {
     kg_str_t out_str = (kg_str_t){0};
     if (cstr) {
-        out_str.len = strnlen(cstr, ISIZE_MAX);
+        out_str.len = kg_cstr_len(cstr);
         out_str.ptr = cstr;
     }
     return out_str;
@@ -911,6 +950,8 @@ kg_inline kg_str_t kg_str_create_n(const char* cstr, isize len) {
     }
     return out_str;
 }
+kg_inline kg_str_t kg_str_create_empty(void) {return (kg_str_t){.len=0,.ptr=""};}
+kg_inline kg_str_t kg_str_create_null(void) {return (kg_str_t){.len=0,.ptr=null};}
 kg_inline kg_str_t kg_str_from_string(const kg_string_t s) {
     return (kg_str_t){.len = kg_string_len(s), .ptr = s};
 }
@@ -1013,7 +1054,7 @@ kg_inline b32 kg_str_is_null_or_empty(const kg_str_t s) {
 kg_inline b32 kg_str_is_valid_cstr(const kg_str_t s) {
     b32 out_ok = false;
     if (s.ptr) {
-        out_ok = kg_cast(isize)strnlen(s.ptr, s.len) == s.len;
+        out_ok = kg_cstr_len_n(s.ptr, s.len) == s.len;
     }
     return out_ok;
 }
@@ -1214,99 +1255,126 @@ kg_inline b32 kg_char_is_alphanumeric(char c) {
     return kg_char_is_digit(c) || kg_char_is_alpha(c);
 }
 
-#define first_codepoint1 0x0000
-#define last_codepoint1  0x007f
-#define first_codepoint2 0x07ff
-#define last_codepoint2  0x0080
-#define first_codepoint3 0x0800
-#define last_codepoint3  0xffff
-#define first_codepoint4 0x010000
-#define last_codepoint4  0x10ffff
-#define tx kg_cast(rune)(0x0080)
-#define t1 kg_cast(rune)(0x0000)
-#define t2 kg_cast(rune)(0x00c0)
-#define t3 kg_cast(rune)(0x00e0)
-#define t4 kg_cast(rune)(0x00f0)
-#define maskx kg_cast(rune)(0x003f)
-#define mask1 kg_cast(rune)(0x0000)
-#define mask2 kg_cast(rune)(0x003f)
-#define mask3 kg_cast(rune)(0x001f)
-#define mask4 kg_cast(rune)(0x000f)
-#define runeerror kg_cast(rune)(0xfffd)
-
-// 0 - 0000
-// 1 - 0001
-// 2 - 0010
-// 3 - 0011
-// 4 - 0100
-// 5 - 0101
-// 6 - 0110
-// 7 - 0111
-// 8 - 1000
-// 9 - 1001
-// c - 1010
-// b - 1011
-// c - 1100
-// d - 1101
-// e - 1110
-// f - 1111
-
-isize kg_utf8_decode_rune(rune* r, u8 b[4]) {
-    kg_printf("kg_utf8_decode_rune implementing\n");
-    isize bytes;
-    if ((b[0] & t1) == t1) {
+kg_static kg_inline b32 kg_utf8_is_cont(u8 b) {
+    return kg_is_between(b, 0x80, 0xbf);
+}
+isize kg_utf8_decode_rune(rune* r, u8* b, isize b_len) {
+    kg_printf("kg_utf8_decode_rune - not done\n");
+    kg_static const u8 maskx = 0x3f;
+    isize bytes = 0;
+    if (b[0] > 0 && b[0] <= 0x7f) {
         bytes = 1;
-        *r = runeerror;
-        // ...
-    } else if ((b[0] & t2) == t2) {
-        // decode('ś') = 0x15b
-        // encode('ś') = [0xc5 0x9b 0x00 0x00]
-        // b[0] = 1100 0101
-        // b[1] = 1001 1011
-        //
-        //    a = 1100 0101 - b[0]
-        //      & 0001 1111 - mask2
-        //      = 0000 0101 - b[0] & mask2
-        //   cast 0000 0000 0000 0000 0000 0000 0000 0101 - kg_cast(rune)(b[0] & mask2)
-        //   << 6 0000 0000 0000 0000 0000 0001 0100 0000 - shift left 6
-        //
-        //    b = 1001 1011 - b[1]
-        //      & 0011 1111 - maskx
-        //      = 0001 1011 - b[1] & maskx
-        //   cast 0000 0000 0000 0000 0000 0000 0001 1011 - kg_cast(rune)(b[1] & maskx)
-        //
-        //    r = 0000 0000 0000 0000 0000 0001 0100 0000
-        //      | 0000 0000 0000 0000 0000 0000 0001 1011 - a | b
-        //      = 0000 0000 0000 0000 0000 0001 0101 1011 - final result in hex: 0x15b
-        //
-        bytes = 2;
-        *r = (kg_cast(rune)(b[0] & mask2) << 6) 
-            | kg_cast(rune)(b[1] & maskx);
-    } else if ((b[0] & t3) == t3) {
-        bytes = 3;
-        *r = (kg_cast(rune)(b[0] & mask3) << 12) 
+        *r = kg_cast(rune)b[0];
+    } else if ((b[0] & 0xe0) == 0xc0 && b_len > 1 && kg_utf8_is_cont(b[1])) {
+        *r =  (kg_cast(rune)(b[0] & 0x3f ) << 6) 
+            |  kg_cast(rune)(b[1] & maskx);
+        if (*r < 0x80) {
+            *r = KG_RUNE_INVALID;
+        } else {
+            bytes = 2;
+        }
+    } else if ((b[0] & 0xf0) == 0xe0 && b_len > 2 && kg_utf8_is_cont(b[1]) && kg_utf8_is_cont(b[2])) {
+        *r =  (kg_cast(rune)(b[0] & 0x1f ) << 12) 
             | (kg_cast(rune)(b[1] & maskx) << 6) 
-            | kg_cast(rune)(b[2] & maskx);
-    } else if ((b[0] & t4) == t4) {
-        bytes = 4;
-        *r = (kg_cast(rune)(b[0] & mask4) << 18) 
-            | (kg_cast(rune)(b[1] & mask4) << 12) 
+            |  kg_cast(rune)(b[2] & maskx);
+        if (*r < 0x800 && (*r >= 0xd800 && *r <= 0xdfff)) {
+            *r = KG_RUNE_INVALID;
+        } else {
+            bytes = 3;
+        }
+    } else if ((b[0] & 0xf8) == 0xf0 && b_len > 3 && kg_utf8_is_cont(b[1]) && kg_utf8_is_cont(b[2]) && kg_utf8_is_cont(b[3])) {
+        *r =  (kg_cast(rune)(b[0] & 0x0f ) << 18) 
+            | (kg_cast(rune)(b[1] & maskx) << 12) 
             | (kg_cast(rune)(b[2] & maskx) << 6) 
-            | kg_cast(rune)(b[3] & maskx);
+            |  kg_cast(rune)(b[3] & maskx);
+        if (*r < 0x10ffff && *r < 0x10000) {
+            *r = KG_RUNE_INVALID;
+        } else {
+            bytes = 4;
+        }
     } else {
         bytes = 0;
-        *r = runeerror;
+        *r = KG_RUNE_INVALID;
+    }
+    if (!kg_rune_is_valid(*r)) {
+        bytes = 0;
+        *r = KG_RUNE_INVALID;
     }
     return bytes;
 }
-
 isize kg_utf8_encode_rune(u8 b[4], rune r) {
-    isize bytes = 0;
-    kg_cast(void)b;
-    kg_cast(void)r;
-    kg_panic("not implemented");
+    kg_printf("kg_utf8_encode_rune - not done\n");
+    u32 i = kg_cast(u32)r;
+    kg_static const u8 maskx = 0x3f;
+    isize bytes;
+    if (i <= 0x7f) {
+        b[0] = kg_cast(u8)r;
+        bytes = 1;
+    } else if (i <= (1<<11)-1) {
+        b[0] = 0xc0 | (kg_cast(u8)(r >> 6));
+        b[1] = 0x80 | (kg_cast(u8)(r)       & maskx);
+        bytes = 2;
+    } else if (!kg_rune_is_valid(i)) {
+        r = KG_RUNE_INVALID;
+        b[0] = 0xe0 | (kg_cast(u8)(r >> 12));
+        b[1] = 0x80 | (kg_cast(u8)(r >> 6)  & maskx);
+        b[2] = 0x80 | (kg_cast(u8)(r)       & maskx);
+        bytes = 3;
+    } else if (i <= (1<<16)-1) {
+        b[0] = 0xe0 | (kg_cast(u8)(r >> 12));
+        b[1] = 0x80 | (kg_cast(u8)(r >> 6)  & maskx);
+        b[2] = 0x80 | (kg_cast(u8)(r)       & maskx);
+        bytes = 3;
+    } else {
+        b[0] = 0xf0 | (kg_cast(u8)(r >> 18));
+        b[1] = 0x80 | (kg_cast(u8)(r >> 12) & maskx);
+        b[2] = 0x80 | (kg_cast(u8)(r >> 6)  & maskx);
+        b[3] = 0x80 | (kg_cast(u8)(r)       & maskx);
+        bytes = 4;
+    } 
     return bytes;
 }
+kg_inline b32 kg_rune_is_valid(rune r) {
+    if (0 <= r && r < KG_RUNE_SURROGATE_MIN) return true;
+    else if (KG_RUNE_SURROGATE_MAX < r && r <= KG_RUNE_MAX) return true;
+    return false;
+}
+kg_inline b32 kg_rune_is_digit(rune r) {
+    return kg_is_between(r, 0x0030, 0x0039);
+}
+kg_inline b32 kg_rune_is_space(rune r) {
+    switch(r) {
+        case 0x09:
+        case 0x0a:
+        case 0x0b:
+        case 0x0c:
+        case 0x0d:
+        case 0x20:
+            return true;
+        case 0xa0:  
+        case 0x1680:
+        case 0x2000:
+        case 0x2001:
+        case 0x2002:
+        case 0x2003:
+        case 0x2004:
+        case 0x2005:
+        case 0x2006:
+        case 0x2007:
+        case 0x2008:
+        case 0x2009:
+        case 0x200a:
+        case 0x2028:
+        case 0x2029:
+        case 0x202f:
+        case 0x205f:
+        case 0x3000:
+            return true;
+        default:
+            return false;
+    }
+}
+
 
 b32 kg_string_builder_create(kg_string_builder_t* b, kg_allocator_t* a, isize cap) {
     b32 out_ok = false;
@@ -1320,10 +1388,10 @@ b32 kg_string_builder_create(kg_string_builder_t* b, kg_allocator_t* a, isize ca
     }
     return out_ok;
 }
-kg_inline b32 kg_string_builder_write_unsafe(kg_string_builder_t* b, const char* cstr, isize n) {
+kg_inline b32 kg_string_builder_write_unsafe(kg_string_builder_t* b, const void* v, isize n) {
     b32 out_ok = false;
     if (kg_string_builder_ensure_available(b, n)) {
-        kg_mem_copy(b->write_ptr, cstr, n);
+        kg_mem_copy(b->write_ptr, v, n);
         b->len += n;
         b->write_ptr += n;
         out_ok = true;
@@ -1355,16 +1423,18 @@ kg_inline b32 kg_string_builder_write_char(kg_string_builder_t* b, char c) {
     b32 out_ok = false;
     if (kg_string_builder_ensure_available(b, 1)) {
         *b->write_ptr = c;
+        b->write_ptr++;
         b->len++;
         out_ok = true;
     }
     return out_ok;
 }
 kg_inline b32 kg_string_builder_write_rune(kg_string_builder_t* b, rune r) {
-    kg_cast(void)b;
-    kg_cast(void)r;
-    kg_panic("not implemented");
-    return true;
+    b32 out_ok = false;
+    u8 buf[8] = {0};
+    isize len = kg_utf8_encode_rune(buf, r);
+    out_ok = kg_string_builder_write_unsafe(b, buf, len);
+    return out_ok;
 }
 b32 kg_string_builder_write_fmt(kg_string_builder_t* b, const char* fmt, ...) {
     b32 out_ok = false;
@@ -1398,7 +1468,7 @@ b32 kg_string_builder_write_fmt_v(kg_string_builder_t* b, const char* fmt, va_li
 }
 kg_inline b32 kg_string_builder_write_cstr(kg_string_builder_t* b, const char* c) {
     b32 out_ok = false;
-    isize len = kg_cast(isize)strnlen(c, ISIZE_MAX);
+    isize len = kg_cstr_len(c);
     if (len > 0) {
         out_ok = kg_string_builder_write_unsafe(b, c, len);
     }
@@ -2088,7 +2158,7 @@ cleanup:
 }
 b32 kg_pool_add_task(kg_pool_t* p, kg_thread_fn_t fn, void* arg) {
     b32 out_ok = false;
-    if (p && fn && arg) {
+    if (p && fn) {
         kg_mutex_lock(&p->work_mutex);
         kg_task_t task = (kg_task_t){
             .fn = fn,
