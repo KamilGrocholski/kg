@@ -324,6 +324,14 @@ void*   kg_darray_create_                (kg_allocator_t* a, isize stride, isize
 void*   kg_darray_grow_                  (void* d, isize n);
 #define kg_darray_header(d)              (kg_cast(kg_darray_header_t*)d - 1)
 #define kg_darray_create(a, T, cap)      kg_cast(T*)kg_darray_create_(a, kg_sizeof(T), cap)
+#define kg_darray_pop(d)                 do { kg_darray_header_t* h = kg_darray_header(d); if (h->len > 0) { h->len--; } } while(0)
+#define kg_darray_swap_remove(d, i)      do { \
+    kg_darray_header_t* h = kg_darray_header(d); \
+    if (0 <= i && i < h->len) { \
+        kg_mem_swap(&d[h->len - 1], &d[i], h->stride); \
+        h->len--; \
+    } \
+} while(0)
 #define kg_darray_append(d, item)        do { \
     kg_darray_ensure_available(d, 1); \
     (d)[kg_darray_header(d)->len++] = (item); \
