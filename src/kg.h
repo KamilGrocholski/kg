@@ -212,6 +212,8 @@ b32         kg_string_is_equal_cstr   (const kg_string_t s, const char* cstr);
 b32         kg_string_is_empty        (const kg_string_t s);
 i32         kg_string_compare         (const kg_string_t s, const kg_string_t other);
 i32         kg_string_compare_n       (const kg_string_t s, const kg_string_t other, isize n);
+u32         kg_string_utf8_len        (const kg_string_t s);
+u32         kg_string_utf8_len_n      (const kg_string_t s, isize n);
 void        kg_string_destroy         (kg_string_t s);
 
 typedef struct kg_str_t {
@@ -246,6 +248,8 @@ isize    kg_str_index              (const kg_str_t s, const kg_str_t needle);
 isize    kg_str_index_char         (const kg_str_t s, char needle);
 i32      kg_str_compare            (const kg_str_t s, const kg_str_t other);
 i32      kg_str_compare_n          (const kg_str_t s, const kg_str_t other, isize n);
+u32      kg_str_utf8_len           (const kg_str_t s);
+u32      kg_str_utf8_len_n         (const kg_str_t s, isize n);
 
 b32 kg_str_to_b32(b32* b, const kg_str_t s);
 b32 kg_str_to_u64(u64* u, const kg_str_t s);
@@ -938,6 +942,12 @@ kg_inline i32 kg_string_compare_n(const kg_string_t s, const kg_string_t other, 
     }
     return out;
 }
+kg_inline u32 kg_string_utf8_len(const kg_string_t s) {
+    return kg_str_utf8_len(kg_str_from_string(s));
+}
+kg_inline u32 kg_string_utf8_len_n(const kg_string_t s, isize n) {
+    return kg_str_utf8_len_n(kg_str_from_string(s), n);
+}
 void kg_string_destroy(kg_string_t s) {
     if (s) {
         kg_string_header_t* h = kg_string_header(s);
@@ -1093,6 +1103,30 @@ kg_inline b32 kg_str_has_suffix(const kg_str_t s, const kg_str_t suffix) {
         out = false;
     }
     return out;
+}
+kg_inline u32 kg_str_utf8_len(const kg_str_t s) {
+    return kg_str_utf8_len_n(s, U32_MAX);
+}
+u32 kg_str_utf8_len_n(const kg_str_t s, isize n) {
+    u32 out_len = 0;
+    for (isize i = 0; out_len < n; i++, out_len++) {
+        rune r = kg_cast(rune)s.ptr[i];
+        if (r == 0) {
+            break;
+        }
+        if (r >= 0 && r < (1<<7)-1) {
+        } else if ((r & 0xe0) == 0xc0) {
+            i++;
+        } else if ((r & 0xf0) == 0xe0) {
+            i+=2;
+        } else if ((r & 0xf8) == 0xf0) {
+            i+=3;
+        } else {
+            out_len = 0;
+            break;
+        }
+    }
+    return out_len;
 }
 isize kg_str_index(const kg_str_t s, const kg_str_t needle) {
     isize out_index = -1;

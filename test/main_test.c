@@ -581,6 +581,19 @@ void test_string_append_rune() {
     kg_string_destroy(s);
 }
 
+void test_str_utf8_len() {
+    kg_str_t s = kg_str_create("ś");
+    kgt_expect_eq(s.len, 2);
+    kgt_expect_eq(kg_str_utf8_len(s), 1);
+}
+
+void test_str_utf8_len_n() {
+    kg_str_t s = kg_str_create("ść");
+    kgt_expect_eq(s.len, 4);
+    kgt_expect_eq(kg_str_utf8_len_n(s, 1), 1);
+    kgt_expect_eq(kg_str_utf8_len_n(s, 2), 2);
+}
+
 int main() {
     kgt_t t;
     kgt_create(&t);
@@ -625,6 +638,8 @@ int main() {
         kgt_register(test_utf8_decode_rune),
         kgt_register(test_uft8_encode_rune),
         kgt_register(test_string_append_rune),
+        kgt_register(test_str_utf8_len),
+        kgt_register(test_str_utf8_len_n),
     }; 
     isize tests_len = kg_sizeof(tests) / kg_sizeof(kgt_test_t);
 
