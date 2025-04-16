@@ -501,6 +501,20 @@ void test_string_builder() {
     kgt_expect_true(kg_string_is_equal_cstr(f6, "cstrstcstrcs fmt 4"));
     kg_string_destroy(f6);
 
+    kgt_expect_true(kg_string_builder_write_rune(&b, 0x15b)); // 'ś'
+    kgt_expect_eq(b.len, 20);
+
+    kg_string_t f7 = kg_string_builder_to_string(&b, &a);
+    kgt_expect_true(kg_string_is_equal_cstr(f7, "cstrstcstrcs fmt 4ś"));
+    kg_string_destroy(f7);
+
+    kgt_expect_true(kg_string_builder_write_char(&b, 'a'));
+    kgt_expect_eq(b.len, 21);
+
+    kg_string_t f8 = kg_string_builder_to_string(&b, &a);
+    kgt_expect_true(kg_string_is_equal_cstr(f8, "cstrstcstrcs fmt 4śa"));
+    kg_string_destroy(f8);
+
     kgt_expect_true(kg_string_builder_reset(&b));
     kgt_expect_eq(kg_string_builder_len(&b), 0);
 
