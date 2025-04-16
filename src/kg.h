@@ -75,12 +75,6 @@ typedef ptrdiff_t isize;
 #define KG_RUNE_SURROGATE_MIN kg_cast(rune)(0xd800)
 #define KG_RUNE_SURROGATE_MAX kg_cast(rune)(0xdfff)
 
-#define kg_bit(x) (1<<(x))
-#define kg_mask_set(var, set, mask) do { \
-    if (set) (var) |=  (mask); \
-    else     (var) &= ~(mask); \
-} while(0)
-
 #define kg_min(x, y)           ((x) < (y) ? (x) : (y))
 #define kg_max(x, y)           ((x) > (y) ? (x) : (y))
 #define kg_clamp(x, i, j)      kg_min(kg_max((x), (i)), (j))
@@ -171,10 +165,12 @@ typedef i32 (*kg_compare_fn_t)(const void* a, const void* b, isize size);
 
 void kg_quicksort(void* src, isize lo, isize hi, isize stride, kg_compare_fn_t compare_fn);
 
-i32   kg_cstr_compare  (const char* a, const char* b);
-i32   kg_cstr_compare_n(const char* a, const char* b, isize n);
-isize kg_cstr_len      (const char* c);
-isize kg_cstr_len_n    (const char* c, isize n);
+i32   kg_cstr_compare     (const char* a, const char* b);
+i32   kg_cstr_compare_n   (const char* a, const char* b, isize n);
+i32   kg_cstr_compare_ci  (const char* a, const char* b);
+i32   kg_cstr_compare_ci_n(const char* a, const char* b, isize n);
+isize kg_cstr_len         (const char* c);
+isize kg_cstr_len_n       (const char* c, isize n);
 
 typedef struct kg_string_header_t {
     isize           len;
@@ -192,6 +188,7 @@ kg_string_t kg_string_from_fmt        (kg_allocator_t* a, const char* fmt, ...);
 kg_string_t kg_string_from_fmt_v      (kg_allocator_t* a, const char* fmt, va_list args);
 kg_string_t kg_string_from_cstr       (kg_allocator_t* a, const char* cstr);
 kg_string_t kg_string_from_cstr_n     (kg_allocator_t* a, const char* cstr, isize cstr_len);
+kg_string_t kg_string_set             (kg_string_t s, const char* cstr);
 kg_string_t kg_string_append          (kg_string_t s, kg_string_t other);
 kg_string_t kg_string_append_unsafe   (kg_string_t s, const void* v, isize v_len);
 kg_string_t kg_string_append_fmt      (kg_string_t s, const char* fmt, ...);
@@ -212,8 +209,11 @@ b32         kg_string_is_equal_cstr   (const kg_string_t s, const char* cstr);
 b32         kg_string_is_empty        (const kg_string_t s);
 i32         kg_string_compare         (const kg_string_t s, const kg_string_t other);
 i32         kg_string_compare_n       (const kg_string_t s, const kg_string_t other, isize n);
+i32         kg_string_compare_ci      (const kg_string_t s, const kg_string_t other);
+i32         kg_string_compare_ci_n    (const kg_string_t s, const kg_string_t other, isize n);
 u32         kg_string_utf8_len        (const kg_string_t s);
 u32         kg_string_utf8_len_n      (const kg_string_t s, isize n);
+void        kg_string_reset           (kg_string_t s);
 void        kg_string_destroy         (kg_string_t s);
 
 typedef struct kg_str_t {
@@ -248,6 +248,8 @@ isize    kg_str_index              (const kg_str_t s, const kg_str_t needle);
 isize    kg_str_index_char         (const kg_str_t s, char needle);
 i32      kg_str_compare            (const kg_str_t s, const kg_str_t other);
 i32      kg_str_compare_n          (const kg_str_t s, const kg_str_t other, isize n);
+i32      kg_str_compare_ci         (const kg_str_t s, const kg_str_t other);
+i32      kg_str_compare_ci_n       (const kg_str_t s, const kg_str_t other, isize n);
 u32      kg_str_utf8_len           (const kg_str_t s);
 u32      kg_str_utf8_len_n         (const kg_str_t s, isize n);
 
@@ -305,10 +307,10 @@ b32         kg_string_builder_cap             (const kg_string_builder_t* b);
 b32         kg_string_builder_len             (const kg_string_builder_t* b);
 b32         kg_string_builder_available       (const kg_string_builder_t* b);
 b32         kg_string_builder_ensure_available(kg_string_builder_t* b, isize n);
-b32         kg_string_builder_reset           (kg_string_builder_t* b);
 kg_string_t kg_string_builder_to_string       (const kg_string_builder_t* b, kg_allocator_t* a);
 isize       kg_string_builder_grow_formula    (const kg_string_builder_t* b, isize n);
 isize       kg_string_builder_mem_size        (const kg_string_builder_t* b);
+void        kg_string_builder_reset           (kg_string_builder_t* b);
 void        kg_string_builder_destroy         (kg_string_builder_t* b);
 
 typedef struct kg_darray_header_t {
@@ -382,11 +384,12 @@ typedef struct kg_file_content_t {
     b32             is_valid;
 } kg_file_content_t;
 
-void              kg_file_create      (kg_file_t* f);
-b32               kg_file_open        (kg_file_t* f, const char* filename, kg_file_mode_t mode, b32 binary);
-isize             kg_file_size        (kg_file_t* f);
-kg_file_content_t kg_file_read_content(kg_allocator_t* a, const char* filename);
-b32               kg_file_close       (kg_file_t* f);
+void              kg_file_create         (kg_file_t* f);
+b32               kg_file_open           (kg_file_t* f, const char* filename, kg_file_mode_t mode, b32 binary);
+isize             kg_file_size           (kg_file_t* f);
+kg_file_content_t kg_file_content_read   (kg_allocator_t* a, const char* filename);
+void              kg_file_content_destroy(kg_file_content_t* fc);
+b32               kg_file_close          (kg_file_t* f);
 
 typedef struct kg_time_t {
     i64 milliseconds;
@@ -685,6 +688,22 @@ kg_inline i32 kg_cstr_compare(const char* a, const char* b) {
 kg_inline i32 kg_cstr_compare_n(const char* a, const char* b, isize n) {
     return strncmp(a, b, n);
 }
+kg_inline i32 kg_cstr_compare_ci(const char* a, const char* b) {
+    return kg_cstr_compare_ci_n(a, b, ISIZE_MAX);
+}
+kg_inline i32 kg_cstr_compare_ci_n(const char* a, const char* b, isize n) {
+    i32 out = 0;
+    isize i = 0;
+    if (n > 0) {
+        while(i++ < n && *a && *b) {
+            out = kg_char_to_lower(*a++) - kg_char_to_lower(*b++);
+            if (out != 0) {
+                break;
+            }
+        }
+    }
+    return out;
+}
 kg_inline isize kg_cstr_len(const char* c) {
     return kg_cast(isize)strnlen(c, ISIZE_MAX);
 }
@@ -763,17 +782,29 @@ kg_string_t kg_string_from_cstr_n(kg_allocator_t* a, const char* cstr, isize cst
     }
     return out_string;
 }
-kg_string_t kg_string_append(kg_string_t s, kg_string_t other) {
-    kg_string_t out_string = null;
-    if (s && other) {
-        kg_string_header_t* s_h = kg_string_header(s);
-        kg_string_header_t* other_h = kg_string_header(other);
-        out_string = kg_string_ensure_available(s, other_h->len);
-        if (out_string) {
-            s_h->len += other_h->len;
-            kg_mem_copy(out_string, other, other_h->len);
-            out_string[s_h->len] = '\0';
+kg_string_t kg_string_set(kg_string_t s, const char* cstr) {
+    kg_string_t out = s;
+    isize cstr_len = kg_cstr_len(cstr);
+    if (cstr_len >= 0) {
+        kg_string_header_t* h = kg_string_header(s);
+        out = kg_string_ensure_available(s, cstr_len);
+        if (out) {
+            kg_mem_copy(out, cstr, cstr_len);
+            h->len = cstr_len;
+            out[h->len] = '\0';
         }
+    }
+    return out;
+}
+kg_string_t kg_string_append(kg_string_t s, kg_string_t other) {
+    kg_string_t out_string = s;
+    kg_string_header_t* s_h = kg_string_header(s);
+    kg_string_header_t* other_h = kg_string_header(other);
+    out_string = kg_string_ensure_available(s, other_h->len);
+    if (out_string) {
+        s_h->len += other_h->len;
+        kg_mem_copy(out_string, other, other_h->len);
+        out_string[s_h->len] = '\0';
     }
     return out_string;
 }
@@ -790,7 +821,7 @@ kg_string_t kg_string_append_unsafe(kg_string_t s, const void* v, isize v_len) {
 }
 kg_string_t kg_string_append_fmt(kg_string_t s, const char* fmt, ...) {
     kg_string_t out_string = s;
-    if (fmt && s) {
+    if (fmt) {
         va_list args;
         va_start(args, fmt);
         out_string = kg_string_append_fmt_v(out_string, fmt, args);
@@ -800,7 +831,7 @@ kg_string_t kg_string_append_fmt(kg_string_t s, const char* fmt, ...) {
 }
 kg_string_t kg_string_append_fmt_v(kg_string_t s, const char* fmt, va_list args) {
     kg_string_t out_string = s;
-    if (fmt && s) {
+    if (fmt) {
         va_list args_copy;
         va_copy(args_copy, args);
         isize length_check = vsnprintf(0, 0, fmt, args_copy);
@@ -834,7 +865,7 @@ kg_string_t kg_string_append_cstr(kg_string_t s, const char* cstr) {
 }
 kg_string_t kg_string_append_cstr_n(kg_string_t s, const char* cstr, isize cstr_len) {
     kg_string_t out_string = null;
-    if (s && cstr && cstr_len > 0) {
+    if (cstr && cstr_len > 0) {
         out_string = kg_string_ensure_available(s, cstr_len);
         if (out_string) {
             kg_string_header_t* out_string_h = kg_string_header(out_string);
@@ -847,15 +878,13 @@ kg_string_t kg_string_append_cstr_n(kg_string_t s, const char* cstr, isize cstr_
 }
 kg_string_t kg_string_grow(kg_string_t s, isize n) {
     kg_string_t out_string = null;
-    if (s) {
-        kg_string_header_t* h = kg_string_header(s);
-        isize old_mem_size = kg_string_mem_size(s);
-        isize new_mem_size = old_mem_size + n + 1;
-        kg_string_header_t* new_h = kg_cast(kg_string_header_t*)h->allocator->proc.resize(h->allocator, h, old_mem_size, new_mem_size);
-        if (new_h) {
-            new_h->cap += n;
-            out_string = kg_cast(kg_string_t)(new_h + 1);
-        }
+    kg_string_header_t* h = kg_string_header(s);
+    isize old_mem_size = kg_string_mem_size(s);
+    isize new_mem_size = old_mem_size + n + 1;
+    kg_string_header_t* new_h = kg_cast(kg_string_header_t*)h->allocator->proc.resize(h->allocator, h, old_mem_size, new_mem_size);
+    if (new_h) {
+        new_h->cap += n;
+        out_string = kg_cast(kg_string_t)(new_h + 1);
     }
     return out_string;
 }
@@ -942,11 +971,36 @@ kg_inline i32 kg_string_compare_n(const kg_string_t s, const kg_string_t other, 
     }
     return out;
 }
+kg_inline i32 kg_string_compare_ci(const kg_string_t s, const kg_string_t other) {
+    isize s_len = kg_string_len(s);
+    isize other_len = kg_string_len(other);
+    i32 out = s_len - other_len;
+    if (out == 0) {
+        out = kg_cstr_compare_ci_n(s, other, s_len);
+    }
+    return out;
+}
+kg_inline i32 kg_string_compare_ci_n(const kg_string_t s, const kg_string_t other, isize n) {
+    i32 out;
+    isize s_len = kg_string_len(s);
+    isize other_len = kg_string_len(other);
+    if (s_len >= n && other_len >= n) {
+        out = kg_cstr_compare_ci_n(s, other, n);
+    } else {
+        out = s_len - other_len;
+    }
+    return out;
+}
 kg_inline u32 kg_string_utf8_len(const kg_string_t s) {
     return kg_str_utf8_len(kg_str_from_string(s));
 }
 kg_inline u32 kg_string_utf8_len_n(const kg_string_t s, isize n) {
     return kg_str_utf8_len_n(kg_str_from_string(s), n);
+}
+kg_inline void kg_string_reset(kg_string_t s) {
+    kg_string_header_t* h = kg_string_header(s);
+    h->len = 0;
+    s[0] = '\0';
 }
 void kg_string_destroy(kg_string_t s) {
     if (s) {
@@ -1161,6 +1215,22 @@ kg_inline i32 kg_str_compare_n(const kg_str_t s, const kg_str_t other, isize n) 
     i32 out;
     if (s.len >= n && other.len >= n) {
         out = kg_cstr_compare_n(s.ptr, other.ptr, n);
+    } else {
+        out = s.len - other.len;
+    }
+    return out;
+}
+kg_inline i32 kg_str_compare_ci(const kg_str_t s, const kg_str_t other) {
+    i32 out = s.len - other.len;
+    if (out == 0) {
+        out = kg_cstr_compare_ci_n(s.ptr, other.ptr, s.len);
+    }
+    return out;
+}
+kg_inline i32 kg_str_compare_ci_n(const kg_str_t s, const kg_str_t other, isize n) {
+    i32 out;
+    if (s.len >= n && other.len >= n) {
+        out = kg_cstr_compare_ci_n(s.ptr, other.ptr, n);
     } else {
         out = s.len - other.len;
     }
@@ -1494,7 +1564,7 @@ b32 kg_string_builder_write_fmt(kg_string_builder_t* b, const char* fmt, ...) {
 }
 b32 kg_string_builder_write_fmt_v(kg_string_builder_t* b, const char* fmt, va_list args) {
     b32 out_ok = false;
-    if (fmt && b) {
+    if (fmt) {
         va_list args_copy;
         va_copy(args_copy, args);
         isize length_check = vsnprintf(0, 0, fmt, args_copy);
@@ -1572,14 +1642,9 @@ kg_inline b32 kg_string_builder_ensure_available(kg_string_builder_t* b, isize n
     return out_ok;
 }
 
-b32 kg_string_builder_reset(kg_string_builder_t* b) {
-    b32 out_ok = false;
-    if (b) {
-        b->write_ptr = b->real_ptr;
-        b->len = 0;
-        out_ok = true;
-    }
-    return out_ok;
+kg_inline void kg_string_builder_reset(kg_string_builder_t* b) {
+    b->write_ptr = b->real_ptr;
+    b->len = 0;
 }
 kg_string_t kg_string_builder_to_string(const kg_string_builder_t* b, kg_allocator_t* a) {
     return kg_string_from_cstr_n(a, b->real_ptr, b->len);
@@ -1646,7 +1711,7 @@ b32 kg_queue_peek(const kg_queue_t* q, void* o) {
 }
 b32 kg_queue_enqueue(kg_queue_t* q, const void* o) {
     b32 out_ok = false;
-    if (q && o && kg_queue_ensure_available(q, 1)) {
+    if (o && kg_queue_ensure_available(q, 1)) {
         if (kg_mem_copy(kg_cast(u8*)q->real_ptr + (q->len * q->stride), o, q->stride) != null) {
             q->len++;
             out_ok = true;
@@ -1656,7 +1721,7 @@ b32 kg_queue_enqueue(kg_queue_t* q, const void* o) {
 }
 b32 kg_queue_deque(kg_queue_t* q, void* o) {
     b32 out_ok = false;
-    if (q && o && q->len > 0) {
+    if (o && q->len > 0) {
         out_ok = kg_mem_copy(o, q->real_ptr, q->stride) != null;
         if (out_ok) {
             kg_mem_move(q->real_ptr, kg_cast(u8*)q->real_ptr + q->stride, (q->len - 1) * q->stride);
@@ -1667,7 +1732,7 @@ b32 kg_queue_deque(kg_queue_t* q, void* o) {
 }
 b32 kg_queue_grow(kg_queue_t* q, isize n) {
     b32 out_ok = false;
-    if (q && n > 0) {
+    if (n > 0) {
         isize old_mem_size = kg_queue_mem_size(q);
         isize new_mem_size = kg_queue_mem_size(q) + q->stride * n;
         void* new_real_ptr = kg_allocator_resize(q->allocator, q->real_ptr, old_mem_size, new_mem_size);
@@ -1765,7 +1830,7 @@ isize kg_file_size(kg_file_t* f) {
     }
     return out_size;
 }
-kg_file_content_t kg_file_read_content(kg_allocator_t* a, const char* filename) {
+kg_file_content_t kg_file_content_read(kg_allocator_t* a, const char* filename) {
     kg_file_content_t out_content = {
         .cstr      = null,
         .len       = 0,
@@ -1788,6 +1853,12 @@ kg_file_content_t kg_file_read_content(kg_allocator_t* a, const char* filename) 
         kg_file_close(&f);
     }
     return out_content;
+}
+void kg_file_content_destroy(kg_file_content_t* fc) {
+    if (fc) {
+        kg_allocator_free(fc->allocator, fc->cstr, fc->len);
+        kg_mem_zero(fc, kg_sizeof(kg_file_content_t));
+    }
 }
 b32 kg_file_close(kg_file_t* f) {
     b32 out_ok = false;

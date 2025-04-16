@@ -23,7 +23,7 @@ void test_mem_swap() {
 
 void test_file_read_contant() {
     kg_allocator_t allocator = kg_allocator_default();
-    kg_file_content_t content = kg_file_read_content(&allocator, "./test/test.txt");
+    kg_file_content_t content = kg_file_content_read(&allocator, "./test/test.txt");
     kgt_expect_true(content.is_valid);
     kgt_expect_not_null(content.cstr);
     kgt_expect_cstr_eq(content.cstr, "test\ntest2\n");
@@ -515,7 +515,7 @@ void test_string_builder() {
     kgt_expect_true(kg_string_is_equal_cstr(f8, "cstrstcstrcs fmt 4śa"));
     kg_string_destroy(f8);
 
-    kgt_expect_true(kg_string_builder_reset(&b));
+    kg_string_builder_reset(&b);
     kgt_expect_eq(kg_string_builder_len(&b), 0);
 
     kg_string_builder_destroy(&b);
@@ -594,6 +594,29 @@ void test_str_utf8_len_n() {
     kgt_expect_eq(kg_str_utf8_len_n(s, 2), 2);
 }
 
+void test_cstr_compare_ci() {
+    const char* a = "1\n23 tesT123";
+    const char* b = "1\n23 TeSt123";
+    kgt_expect_eq(kg_cstr_compare_ci(a, b), 0);
+}
+
+void test_cstr_compare_ci_n() {
+    const char* a = "1\n23a TeasT123";
+    const char* b = "1\n23A tebSt123";
+    kgt_expect_eq(kg_cstr_compare_ci_n(a, b, 7), 0);
+    kgt_expect_lt(kg_cstr_compare_ci_n(a, b, 9), 0);
+}
+
+void test_string_set() {
+    kg_allocator_t allocator = kg_allocator_default();
+    kg_string_t s = kg_string_create(&allocator, 0);
+    kgt_expect_not_null(s);
+    s = kg_string_set(s, "okej");
+    kgt_expect_cstr_eq(s, "okej");
+    s = kg_string_set(s, "");
+    kgt_expect_cstr_eq(s, "");
+}
+
 int main() {
     kgt_t t;
     kgt_create(&t);
@@ -640,6 +663,9 @@ int main() {
         kgt_register(test_string_append_rune),
         kgt_register(test_str_utf8_len),
         kgt_register(test_str_utf8_len_n),
+        kgt_register(test_cstr_compare_ci),
+        kgt_register(test_cstr_compare_ci_n),
+        kgt_register(test_string_set),
     }; 
     isize tests_len = kg_sizeof(tests) / kg_sizeof(kgt_test_t);
 
