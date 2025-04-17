@@ -28,7 +28,7 @@ $(NAME): dir $(OBJS)
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$(NAME) $(OBJS) $(ENTRYCFILE) $(LDFLAGS)
 
 dev: 
-	make && $(BIN_DIR)/$(NAME)
+	@make && $(BIN_DIR)/$(NAME)
 
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)

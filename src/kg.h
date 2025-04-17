@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <time.h>
 
 typedef int8_t    i8;
 typedef int16_t   i16;
@@ -400,13 +401,13 @@ void              kg_file_content_destroy(kg_file_content_t* fc);
 b32               kg_file_close          (kg_file_t* f);
 
 typedef struct kg_time_t {
-    i64 milliseconds;
+    struct timespec wall;      // CLOCK_REALTIME
+    struct timespec monotonic; // CLOCK_MONOTONIC
 } kg_time_t;
 
 typedef struct kg_duration_t {
-    i64 milliseconds;
-    // u64 seconds;
-    // u64 nanoseconds;
+    time_t sec;
+    long   nsec;
 } kg_duration_t;
 
 typedef enum kg_month_t {
@@ -446,29 +447,28 @@ const u64 KG_SECOND      = 1000 * KG_MILLISECOND;
 const u64 KG_MINUTE      = 60 * KG_SECOND;
 const u64 KG_HOUR        = 60 * KG_MINUTE;
 
-void          kg_time_sleep      (const kg_duration_t d);
-kg_time_t     kg_time_now        (void);
-kg_time_t     kg_time_add        (const kg_time_t t, const kg_duration_t d);
-kg_time_t     kg_time_sub        (const kg_time_t t, const kg_duration_t d);
-b32           kg_time_is_equal   (const kg_time_t t, const kg_time_t o);
-b32           kg_time_is_after   (const kg_time_t t, const kg_time_t o);
-b32           kg_time_is_before  (const kg_time_t t, const kg_time_t o);
-kg_duration_t kg_time_diff       (const kg_time_t t, const kg_time_t other);
-kg_date_t     kg_time_to_date    (const kg_time_t t);
-kg_datetime_t kg_time_to_datetime(const kg_time_t t);
-i32           kg_time_to_year    (const kg_time_t t);
-kg_month_t    kg_time_to_month   (const kg_time_t t);
-i32           kg_time_to_day     (const kg_time_t t);
+void          kg_time_sleep        (const kg_duration_t d);
+kg_time_t     kg_time_now          (void);
+kg_time_t     kg_time_add          (const kg_time_t t, const kg_duration_t d);
+kg_time_t     kg_time_sub          (const kg_time_t t, const kg_duration_t d);
+b32           kg_time_is_equal     (const kg_time_t t, const kg_time_t o);
+b32           kg_time_is_after     (const kg_time_t t, const kg_time_t o);
+b32           kg_time_is_before    (const kg_time_t t, const kg_time_t o);
+kg_duration_t kg_time_diff         (const kg_time_t t, const kg_time_t o);
+kg_duration_t kg_time_since        (const kg_time_t t);
+i32           kg_time_to_year      (const kg_time_t t);
+kg_month_t    kg_time_to_month     (const kg_time_t t);
+i32           kg_time_to_day       (const kg_time_t t);
+kg_string_t   kg_time_to_string    (const kg_time_t t, kg_allocator_t* a);
+isize         kg_time_to_cstr      (const kg_time_t t, char* b);
+kg_string_t   kg_time_now_as_string(kg_allocator_t* a);
 
-kg_duration_t kg_duration_create           (i64 milliseconds);
+kg_duration_t kg_duration_create           (i64 seconds, i64 nanoseconds);
 kg_duration_t kg_duration_from_milliseconds(i64 milliseconds);
-kg_duration_t kg_duration_since            (const kg_time_t t);
 i64           kg_duration_to_milliseconds  (const kg_duration_t d);
-
-kg_string_t kg_date_to_string    (kg_allocator_t* a, const kg_date_t d);
-isize       kg_date_to_cstr      (char b[DATE_MAX_CHARS_LEN], const kg_date_t d);
-kg_string_t kg_datetime_to_string(kg_allocator_t* a, const kg_datetime_t d);
-isize       kg_datetime_to_cstr  (char b[DATETIME_MAX_CHARS_LEN], const kg_datetime_t d);
+f64           kg_duration_to_hours         (const kg_duration_t d);
+i64           kg_duration_to_seconds       (const kg_duration_t d);
+kg_string_t   kg_duration_to_string        (const kg_duration_t d, kg_allocator_t* a);
 
 f64 kg_math_pow(f64 base, f64 exponent);
 
@@ -1880,127 +1880,145 @@ b32 kg_file_close(kg_file_t* f) {
 }
 
 void kg_time_sleep(const kg_duration_t d) {
-    i64 milliseconds = kg_duration_to_milliseconds(d);
     struct timespec ts = {
-        .tv_sec  = milliseconds / 1000,
-        .tv_nsec = milliseconds % 1000,
+        .tv_sec  = d.sec,
+        .tv_nsec = d.nsec,
     };
-    nanosleep(&ts, null);
+    kg_assert_fmt(nanosleep(&ts, null) == 0, "not my fault");
 }
-
 kg_time_t kg_time_now(void) {
-    struct timeval tv;
-    gettimeofday(&tv, null);
-    kg_time_t out = {
-        .milliseconds = kg_cast(i64)(tv.tv_sec * 1000 + tv.tv_usec / 1000),
-    };
+    kg_time_t out = (kg_time_t){0};
+    kg_assert_fmt(clock_gettime(CLOCK_REALTIME, &out.wall) == 0, "not my fault");
+    kg_assert_fmt(clock_gettime(CLOCK_MONOTONIC, &out.monotonic) == 0, "not my fault");
     return out;
 }
 kg_inline kg_time_t kg_time_add(const kg_time_t t, const kg_duration_t d) {
-    kg_time_t out_time = (kg_time_t){.milliseconds = t.milliseconds + d.milliseconds};
-    return out_time;
+    kg_time_t out = (kg_time_t){
+        .wall = {
+            .tv_sec  = t.wall.tv_sec + d.sec,
+            .tv_nsec = t.wall.tv_nsec + d.nsec,
+        },
+        .monotonic = {
+            .tv_sec  = t.monotonic.tv_sec + d.sec,
+            .tv_nsec = t.monotonic.tv_nsec + d.nsec,
+        },
+    };
+    return out;
 }
 kg_inline kg_time_t kg_time_sub(const kg_time_t t, const kg_duration_t d) {
-    kg_time_t out_time = (kg_time_t){.milliseconds = t.milliseconds - d.milliseconds};
-    return out_time;
+    kg_time_t out = (kg_time_t){
+        .wall = {
+            .tv_sec  = t.wall.tv_sec - d.sec,
+            .tv_nsec = t.wall.tv_nsec - d.nsec,
+        },
+        .monotonic = {
+            .tv_sec  = t.monotonic.tv_sec - d.sec,
+            .tv_nsec = t.monotonic.tv_nsec - d.nsec,
+        },
+    };
+    return out;
 }
 kg_inline b32 kg_time_is_equal(const kg_time_t t, const kg_time_t o) {
-    return t.milliseconds == o.milliseconds;
+    return t.monotonic.tv_sec == o.monotonic.tv_sec && t.monotonic.tv_nsec == o.monotonic.tv_nsec;
 }
 kg_inline b32 kg_time_is_after(const kg_time_t t, const kg_time_t o) {
-    return t.milliseconds > o.milliseconds;
+    b32 out;
+    if (t.monotonic.tv_sec > o.monotonic.tv_sec) {
+        out = true;
+    } else if (t.monotonic.tv_sec < o.monotonic.tv_sec) {
+        out = false;
+    } else {
+        out = t.monotonic.tv_nsec > o.monotonic.tv_nsec;
+    }
+    return out;
 }
 kg_inline b32 kg_time_is_before(const kg_time_t t, const kg_time_t o) {
-    return t.milliseconds < o.milliseconds;
+    b32 out;
+    if (t.monotonic.tv_sec < o.monotonic.tv_sec) {
+        out = true;
+    } else if (t.monotonic.tv_sec > o.monotonic.tv_sec) {
+        out = false;
+    } else {
+        out = t.monotonic.tv_nsec < o.monotonic.tv_nsec;
+    }
+    return out;
 }
 kg_inline kg_duration_t kg_time_diff(const kg_time_t t, const kg_time_t other) {
-    kg_duration_t out = { 
-        .milliseconds = t.milliseconds - other.milliseconds,
-    };
+    kg_duration_t out;
+    if (kg_time_is_after(t, other)) {
+        out = (kg_duration_t){
+            .sec = t.monotonic.tv_sec - other.monotonic.tv_sec,
+            .nsec = t.monotonic.tv_nsec - other.monotonic.tv_nsec,
+        };
+    } else {
+        out = (kg_duration_t){
+            .sec = other.monotonic.tv_sec - t.monotonic.tv_sec,
+            .nsec = other.monotonic.tv_nsec - t.monotonic.tv_nsec,
+        };
+    }
+    kg_printf("kg_time_diff - not done\n");
+    if (out.nsec < 0) {
+        out.sec -= 1;
+        out.nsec += 1e9L;
+    }
     return out;
 }
-kg_inline kg_date_t kg_time_to_date(const kg_time_t t) {
-    i64 seconds = t.milliseconds / 1000;
-    struct tm *lt = localtime(&seconds);
-    kg_date_t out = {
-        .year  = lt->tm_year + 1900,
-        .month = lt->tm_mon + 1,
-        .day   = lt->tm_mday,
-    };
-    return out;
-}
-kg_inline kg_datetime_t kg_time_to_datetime(const kg_time_t t) {
-    i64 seconds = t.milliseconds / 1000;
-    struct tm *lt = localtime(&seconds);
-    kg_datetime_t out = {
-        .year    = lt->tm_year + 1900,
-        .month   = lt->tm_mon + 1,
-        .day     = lt->tm_mday,
-        .hour    = lt->tm_hour,
-        .minute  = lt->tm_min,
-        .second  = lt->tm_sec,
-    };
-    return out;
-}
-kg_inline i32 kg_time_to_year(const kg_time_t t) {
-    i64 seconds = t.milliseconds / 1000;
-    struct tm *lt = localtime(&seconds);
-    return lt->tm_year + 1900;
-}
-kg_inline kg_month_t kg_time_to_month(const kg_time_t t) {
-    i64 seconds = t.milliseconds / 1000;
-    struct tm *lt = localtime(&seconds);
-    return lt->tm_mon + 1;
-}
-kg_inline i32 kg_time_to_day(const kg_time_t t) {
-    i64 seconds = t.milliseconds / 1000;
-    struct tm *lt = localtime(&seconds);
-    return lt->tm_mday;
-}
-kg_inline kg_duration_t kg_duration_create(i64 milliseconds) {
-    return (kg_duration_t){milliseconds};
-}
-kg_inline kg_duration_t kg_duration_from_milliseconds(i64 milliseconds) {
-    return (kg_duration_t){milliseconds};
+kg_inline kg_duration_t kg_time_since(const kg_time_t t) {
+    return kg_time_diff(kg_time_now(), t);
 }
 kg_inline kg_duration_t kg_duration_since(const kg_time_t t) {
-    kg_duration_t out = { 
-        .milliseconds = kg_time_now().milliseconds - t.milliseconds,
-    };
+    kg_time_t now = kg_time_now();
+    kg_duration_t out = kg_time_diff(now, t);
     return out;
+}
+kg_string_t kg_time_to_string(const kg_time_t t, kg_allocator_t* a) {
+    kg_string_t out = kg_string_create(a, 255);
+    kg_assert(kg_time_to_cstr(t, out) < 255);
+    return out;
+}
+kg_string_t kg_time_now_as_string(kg_allocator_t* a) {
+    kg_string_t out = kg_string_create(a, 255);
+    kg_time_t now = kg_time_now();
+    kg_assert(kg_time_to_cstr(now, out) < 255);
+    return out;
+}
+isize kg_time_to_cstr(const kg_time_t t, char* b) {
+    isize out = 0;
+    kg_cast(void)t;
+    kg_cast(void)b;
+    struct tm tm;
+    if (null == localtime_r(&t.wall.tv_sec, &tm)) {
+        out = 0;
+    } else {
+        strftime(b, 255, "%Y-%m-%d %H:%M:%S", &tm);
+        isize len = kg_cstr_len(b);
+        snprintf(b + len, 255 - len, ".%09ld", t.wall.tv_nsec);
+    }
+    return out;
+}
+kg_inline kg_duration_t kg_duration_create(i64 seconds, i64 nanoseconds) {
+    return (kg_duration_t){
+        .sec  = seconds,
+        .nsec = nanoseconds,
+    };
+}
+kg_inline kg_duration_t kg_duration_from_milliseconds(i64 milliseconds) {
+    return (kg_duration_t){
+        .sec  = milliseconds / 1000,
+        .nsec = milliseconds % 1000,
+    };
 }
 kg_inline i64 kg_duration_to_milliseconds(const kg_duration_t d) {
-    return d.milliseconds;
+    return d.sec * 1000;
 }
-kg_string_t kg_date_to_string(kg_allocator_t* a, const kg_date_t d) {
-    kg_string_t out = null;
-    char buf[DATE_MAX_CHARS_LEN] = {0};
-    if (kg_date_to_cstr(buf, d) > 0) {
-        out = kg_string_from_cstr(a, buf);
-    }
-    return out;
+f64 kg_duration_to_hours(const kg_duration_t d) {
+    return kg_cast(f64)d.sec / (60 * 60);
 }
-isize kg_date_to_cstr(char b[DATE_MAX_CHARS_LEN], const kg_date_t d) {
-    i32 len = sprintf(b, "%d-%02d-%02d", d.year, d.month, d.day);
-    if (len > 0) {
-        b[len] = '\0';
-    }
-    return len;
+i64 kg_duration_to_seconds(const kg_duration_t d) {
+    return kg_cast(i64)d.sec;
 }
-kg_string_t kg_datetime_to_string(kg_allocator_t* a, const kg_datetime_t d) {
-    kg_string_t out = null;
-    char buf[DATETIME_MAX_CHARS_LEN] = {0};
-    if (kg_datetime_to_cstr(buf, d) > 0) {
-        out = kg_string_from_cstr(a, buf);
-    }
-    return out;
-}
-isize kg_datetime_to_cstr(char b[DATETIME_MAX_CHARS_LEN], const kg_datetime_t d) {
-    isize len = sprintf(b, "%d-%02d-%02d %02d:%02d:%02d", d.year, d.month, d.day, d.hour, d.minute, d.second);
-    if (len > 0) {
-        b[len] = '\0';
-    }
-    return len;
+kg_string_t kg_duration_to_string(const kg_duration_t d, kg_allocator_t* a) {
+    return kg_string_from_fmt(a, "%llu sec %lli nsec", d.sec, d.nsec);
 }
 
 kg_inline f64 kg_math_pow(f64 base, f64 exponent) {
@@ -2641,11 +2659,10 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
     if (kg_string_builder_create(&sb, &allocator, 128)) {
         if (level != KG_LOG_LEVEL_RAW) {
             kg_time_t time = kg_time_now();
-            kg_datetime_t datetime = kg_time_to_datetime(time);
-            char datetime_cstr[DATETIME_MAX_CHARS_LEN] = {0};
-            if (kg_datetime_to_cstr(datetime_cstr, datetime) > 0) {
+            char time_cstr[DATETIME_MAX_CHARS_LEN] = {0};
+            if (kg_time_to_cstr(time, time_cstr) > 0) {
                 kg_string_builder_write_fmt(&sb, "\x1b[90m%s\x1b[0m %s%s \x1b[0m", 
-                                            datetime_cstr, 
+                                            time_cstr, 
                                             level_colors[level],
                                             level_cstrs[level]);
             }

@@ -29,7 +29,13 @@ void* task_without_mutex(void* arg) {
 }
 
 i32 main(i32 argc, char* argv[]) {
+    kg_allocator_t allocator = kg_allocator_default();
+
     kg_logger_create();
+
+    kg_string_t time_string = kg_time_now_as_string(&allocator);
+    kg_log("%s", time_string);
+    kg_string_destroy(time_string);
 
     b32 help_flag;
     kg_str_t str_flag;
@@ -55,8 +61,6 @@ i32 main(i32 argc, char* argv[]) {
     kg_log_info("b32_flag: %s", b32_flag ? "true" : "false");
     kg_log_info("u64_flag: %lu", u64_flag);
     kg_log_info("i64_flag: %li", i64_flag);
-
-    kg_allocator_t allocator = kg_allocator_default();
 
     kg_pool_t p;
     isize workers = 5;

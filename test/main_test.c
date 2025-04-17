@@ -310,31 +310,42 @@ void test_str_chop_first_split_by() {
     kgt_expect_true(kg_str_is_empty(str));
 }
 
+void test_time() {
+    kg_allocator_t allocator = kg_allocator_default();
+    kg_time_t start = kg_time_now();
+    kg_string_t s = kg_time_to_string(start, &allocator);
+    kg_string_destroy(s);
+}
+
 void test_duration_since() {
     kg_time_t t = kg_time_now();
-    kg_duration_t d = kg_duration_since(t);
+    kg_duration_t d = kg_time_since(t);
     kgt_expect_eq(kg_duration_to_milliseconds(d), 0);
 }
 
-void test_time_date() {
-    kg_time_t t = kg_time_now();
-    kg_date_t d = kg_time_to_date(t);
-    time_t ct = time(null);
-    struct tm *lt = localtime(&ct);
-    kgt_expect_eq(d.year, lt->tm_year + 1900);
-    kgt_expect_eq(d.month, kg_cast(kg_month_t)(lt->tm_mon + 1));
-    kgt_expect_eq(d.day, lt->tm_mday);
+void test_time_sub() {
+    kg_time_t ta = kg_time_now();
+    kg_time_t tb = kg_time_sub(ta, kg_duration_create(10, 22));
+    kg_duration_t dc = kg_time_diff(ta, tb);
+    kgt_expect_gt(kg_duration_to_milliseconds(dc), 0);
+}
+
+void test_time_add() {
+    kg_time_t ta = kg_time_now();
+    kg_time_t tb = kg_time_add(ta, kg_duration_create(10, 22));
+    kg_duration_t dc = kg_time_diff(ta, tb);
+    kgt_expect_gt(kg_duration_to_milliseconds(dc), 0);
 }
 
 void test_time_diff() {
     kg_time_t ta = kg_time_now();
-    kg_time_t tb = kg_time_add(ta, kg_duration_create(10));
+    kg_time_t tb = kg_time_add(ta, kg_duration_create(1000, 0));
     kg_duration_t dc = kg_time_diff(ta, tb);
-    kgt_expect_true((kg_duration_to_milliseconds(dc) < 0));
+    kgt_expect_gt(kg_duration_to_milliseconds(dc), 0);
 }
 
 void test_time_math() {
-    kg_duration_t d = kg_duration_create(10);
+    kg_duration_t d = kg_duration_create(10, 0);
     kg_time_t ta = kg_time_now();
     kg_time_t tb = kg_time_add(ta, d);
     kgt_expect_true(kg_time_is_before(ta, tb));
@@ -441,24 +452,6 @@ void test_pool() {
     kg_mutex_destroy(&st.mutex);
     kgt_expect_eq(st.value, iter);
     kg_pool_destroy(&p);
-}
-
-void test_datetime() {
-    kg_allocator_t allocator = kg_allocator_default();
-    kg_time_t t = kg_time_now();
-    kg_datetime_t d = kg_time_to_datetime(t);
-    kg_string_t s = kg_datetime_to_string(&allocator, d);
-    kgt_expect_false(kg_string_is_empty(s));
-    kg_string_destroy(s);
-}
-
-void test_date() {
-    kg_allocator_t allocator = kg_allocator_default();
-    kg_time_t t = kg_time_now();
-    kg_date_t d = kg_time_to_date(t);
-    kg_string_t s = kg_date_to_string(&allocator, d);
-    kgt_expect_false(kg_string_is_empty(s));
-    kg_string_destroy(s);
 }
 
 void test_quicksort() {
@@ -651,6 +644,7 @@ int main() {
     kgt_create(&t);
 
     kgt_test_t tests[] = {
+        kgt_register(test_time),
         kgt_register(test_allocator_default),
         kgt_register(test_mem_swap),
         kgt_register(test_darray),
@@ -674,8 +668,8 @@ int main() {
         kgt_register(test_str_sub),
         kgt_register(test_str_chop_first_split_by),
         kgt_register(test_duration_since),
-        kgt_register(test_time_date),
         kgt_register(test_time_diff),
+        kgt_register(test_time_add),
         kgt_register(test_time_math),
         kgt_register(test_math),
         kgt_register(test_format),
@@ -683,8 +677,6 @@ int main() {
         kgt_register(test_allocator_temp),
         kgt_register(test_queue),
         kgt_register(test_pool),
-        kgt_register(test_datetime),
-        kgt_register(test_date),
         kgt_register(test_quicksort),
         kgt_register(test_string_builder),
         kgt_register(test_uft8),
