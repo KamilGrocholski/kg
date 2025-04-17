@@ -1983,8 +1983,6 @@ kg_string_t kg_time_now_as_string(kg_allocator_t* a) {
 }
 isize kg_time_to_cstr(const kg_time_t t, char* b) {
     isize out = 0;
-    kg_cast(void)t;
-    kg_cast(void)b;
     struct tm tm;
     if (null == localtime_r(&t.wall.tv_sec, &tm)) {
         out = 0;
