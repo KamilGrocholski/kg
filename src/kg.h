@@ -57,12 +57,11 @@ typedef ptrdiff_t isize;
 #define false 0
 #define null  NULL
 
-#define U64_MAX_CHARS_LEN      21
-#define I64_MAX_CHARS_LEN      21
-#define DATE_MAX_CHARS_LEN     21
-#define DATETIME_MAX_CHARS_LEN 41
-#define B32_MAX_CHARS_LEN      6
-#define F64_MAX_CHARS_LEN      25
+#define TIME_MAX_CHARS_LEN 41
+#define U64_MAX_CHARS_LEN  21
+#define I64_MAX_CHARS_LEN  21
+#define B32_MAX_CHARS_LEN  6
+#define F64_MAX_CHARS_LEN  25
 
 #define kg_cast(T)       (T)
 #define kg_sizeof(T)     kg_cast(isize)sizeof(T)
@@ -2659,7 +2658,7 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
     if (kg_string_builder_create(&sb, &allocator, 128)) {
         if (level != KG_LOG_LEVEL_RAW) {
             kg_time_t time = kg_time_now();
-            char time_cstr[DATETIME_MAX_CHARS_LEN] = {0};
+            char time_cstr[TIME_MAX_CHARS_LEN] = {0};
             if (kg_time_to_cstr(time, time_cstr) > 0) {
                 kg_string_builder_write_fmt(&sb, "\x1b[90m%s\x1b[0m %s%s \x1b[0m", 
                                             time_cstr, 
