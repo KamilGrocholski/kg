@@ -303,12 +303,12 @@ b32         kg_string_builder_write_str_n     (kg_string_builder_t* b, const kg_
 b32         kg_string_builder_write_string    (kg_string_builder_t* b, const kg_string_t s);
 b32         kg_string_builder_write_string_n  (kg_string_builder_t* b, const kg_string_t s, isize n);
 b32         kg_string_builder_grow            (kg_string_builder_t* b, isize n);
+b32         kg_string_builder_grow_formula    (kg_string_builder_t* b, isize n);
 b32         kg_string_builder_cap             (const kg_string_builder_t* b);
 b32         kg_string_builder_len             (const kg_string_builder_t* b);
 b32         kg_string_builder_available       (const kg_string_builder_t* b);
 b32         kg_string_builder_ensure_available(kg_string_builder_t* b, isize n);
 kg_string_t kg_string_builder_to_string       (const kg_string_builder_t* b, kg_allocator_t* a);
-isize       kg_string_builder_grow_formula    (const kg_string_builder_t* b, isize n);
 isize       kg_string_builder_mem_size        (const kg_string_builder_t* b);
 void        kg_string_builder_reset           (kg_string_builder_t* b);
 void        kg_string_builder_destroy         (kg_string_builder_t* b);
@@ -1720,8 +1720,7 @@ kg_inline b32 kg_string_builder_available(const kg_string_builder_t* b) {
 kg_inline b32 kg_string_builder_ensure_available(kg_string_builder_t* b, isize n) {
     b32 out_ok = true;
     if (kg_string_builder_available(b) < n) {
-        isize new_cap = kg_string_builder_grow_formula(b, n);
-        out_ok = kg_string_builder_grow(b, new_cap);
+        out_ok = kg_string_builder_grow_formula(b, n);
     }
     return out_ok;
 }
@@ -1733,8 +1732,8 @@ kg_inline void kg_string_builder_reset(kg_string_builder_t* b) {
 kg_string_t kg_string_builder_to_string(const kg_string_builder_t* b, kg_allocator_t* a) {
     return kg_string_from_cstr_n(a, b->real_ptr, b->len);
 }
-kg_inline isize kg_string_builder_grow_formula(const kg_string_builder_t* b, isize n) {
-    return b->cap * 2 + n;
+kg_inline b32 kg_string_builder_grow_formula(kg_string_builder_t* b, isize n) {
+    return kg_string_builder_grow(b, b->cap * 2 + n);
 }
 kg_inline isize kg_string_builder_mem_size(const kg_string_builder_t* b) {
     return b ? b->cap : 0;
@@ -2656,7 +2655,7 @@ void kg_flags_parse(i32 argc, char* argv[]) {
                         kg_flag_parse_i64(flag, arg_meta.value);
                         break;
                     default:
-                    kg_panic("KG_FLAGS - unknown flag kind '%d'", flag->kind);
+                        kg_panic("KG_FLAGS - unknown flag kind '%d'", flag->kind);
                 }
                 break;
             }
