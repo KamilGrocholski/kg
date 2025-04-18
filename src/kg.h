@@ -2656,7 +2656,7 @@ void kg_flags_parse(i32 argc, char* argv[]) {
                         kg_flag_parse_i64(flag, arg_meta.value);
                         break;
                     default:
-                        kg_panic("KG_FLAGS: unknown flag kind");
+                    kg_panic("KG_FLAGS - unknown flag kind '%d'", flag->kind);
                 }
                 break;
             }
@@ -2666,7 +2666,22 @@ void kg_flags_parse(i32 argc, char* argv[]) {
 void kg_flags_usage(void) {
     for (isize i = 0; i < kg_flags_len; i++) {
         kg_flag_t f = kg_flags[i];
-        kg_printf("--%s\n\tkind: %s\n\tusage: %s\n", f.name, kg_flag_kind_to_cstr(f.kind), f.usage);
+        switch (f.kind) {
+            case KG_FLAG_KIND_STR:
+                kg_printf("--%s\n\tkind:    %s\n\tusage:   %s\n\tdefault: '%.*s'\n", f.name, kg_flag_kind_to_cstr(f.kind), f.usage, f.default_str.len, f.default_str.ptr);
+                break;
+            case KG_FLAG_KIND_B32:
+                kg_printf("--%s\n\tkind:    %s\n\tusage:   %s\n\tdefault: %s\n", f.name, kg_flag_kind_to_cstr(f.kind), f.usage, f.default_b32 ? "true" : "false");
+                break;
+            case KG_FLAG_KIND_I64:
+                kg_printf("--%s\n\tkind:    %s\n\tusage:   %s\n\tdefault: %lli\n", f.name, kg_flag_kind_to_cstr(f.kind), f.usage, f.default_str.len, f.default_i64);
+                break;
+            case KG_FLAG_KIND_U64:
+                kg_printf("--%s\n\tkind:    %s\n\tusage:   %s\n\tdefault: %llu\n", f.name, kg_flag_kind_to_cstr(f.kind), f.usage, f.default_str.len, f.default_u64);
+                break;
+            default:
+                kg_panic("KG_FLAGS - unknown flag kind '%d'", f.kind);
+        }
     }
 }
 
