@@ -163,7 +163,7 @@ typedef struct kg_allocator_t {
 
 typedef i32 (*kg_compare_fn_t)(const void* a, const void* b, isize size);
 
-void kg_quicksort(void* src, isize lo, isize hi, isize stride, kg_compare_fn_t compare_fn);
+void  kg_quicksort    (void* src, isize lo, isize hi, isize stride, kg_compare_fn_t compare_fn);
 
 i32   kg_cstr_compare     (const char* a, const char* b);
 i32   kg_cstr_compare_n   (const char* a, const char* b, isize n);
@@ -397,77 +397,14 @@ KG_DARRAY_TYPEDEF(i64, i64)
 KG_DARRAY_TYPEDEF(u64, u64)
 KG_DARRAY_TYPEDEF(f32, f32)
 KG_DARRAY_TYPEDEF(f64, f64)
+KG_DARRAY_TYPEDEF(rune, rune)
 KG_DARRAY_TYPEDEF(isize, isize)
 KG_DARRAY_TYPEDEF(usize, usize)
 KG_DARRAY_TYPEDEF(kg_string_t, string)
 KG_DARRAY_TYPEDEF(kg_str_t, str)
+KG_DARRAY_TYPEDEF(char, char)
 KG_DARRAY_TYPEDEF(const char*, cstr)
 KG_DARRAY_TYPEDEF(const void*, void)
-
-/*typedef struct kg_map_kv_t {*/
-/*    const kg_str_t key;*/
-/*    void*          value;*/
-/*    b32            is_occupied;*/
-/*} kg_map_kv_t;*/
-/**/
-/*typedef struct kg_map_base_t {*/
-/*    kg_allocator_t* allocator;*/
-/*    kg_map_kv_t**   buckets;*/
-/*    isize           buckets_n;*/
-/*    isize           item_size;*/
-/*} kg_map_base_t;*/
-/**/
-/*void* kg_map_create_ (kg_allocator_t* a, isize item_size, kg_map_base_t* out_b);*/
-/*void* kg_map_resize_ (kg_map_base_t* b);*/
-/*usize kg_map_hash_   (const kg_str_t key);*/
-/*void* kg_map_put_    (kg_map_base_t* b, const kg_str_t key, void* value);*/
-/*void* kg_map_get_    (kg_map_base_t* b, const kg_str_t key);*/
-/*void  kg_map_remove_ (kg_map_base_t* b, const kg_str_t key);*/
-/*void  kg_map_destroy_(kg_map_base_t* b);*/
-/**/
-/*#define KG_MAP_TYPEDEF(T, name) \*/
-/*    typedef struct kg_map_##name##_t { \*/
-/*        kg_map_base_t base; \*/
-/*        T*            ref; \*/
-/*    } kg_map_##name##_t; \*/
-/*    kg_static kg_inline kg_map_##name##_t kg_map_##name##_create(kg_allocator_t* a) { \*/
-/*        kg_map_##name##_t out = {0}; \*/
-/*        kg_map_create_(a, kg_sizeof(T), &out); \*/
-/*        return out; \*/
-/*    } \*/
-/*    kg_static kg_inline b32 kg_map_##name##_put(kg_map_##name##_t* m, const kg_str_t key, T value) { \*/
-/*        kg_map_put_(&m->base, key,v value, &value); \*/
-/*        return true; \*/
-/*    } \*/
-/*    kg_static kg_inline T* kg_map_##name##_get(kg_map_##name##_t* m, const kg_str_T key) { \*/
-/*        return kg_cast(T*)kg_map_get_(&m->base, key,v value); \*/
-/*    } \*/
-/*    kg_static kg_inline void kg_map_##name##_remove(kg_map_##name##_t* m, const kg_str_t key) { \*/
-/*        kg_map_remove_(&m->base, key,v value); \*/
-/*    } \*/
-/*    kg_static kg_inline void kg_map_##name##_destroy(kg_map_##name##_t* m) { \*/
-/*        if (m) { \*/
-/*            kg_map_destroy_(&m->base); \*/
-/*        } \*/
-/*    } \*/
-/**/
-/*KG_MAP_TYPEDEF(b32, b32)*/
-/*KG_MAP_TYPEDEF(i8, i8)*/
-/*KG_MAP_TYPEDEF(u8, u8)*/
-/*KG_MAP_TYPEDEF(i16, i16)*/
-/*KG_MAP_TYPEDEF(u16, u16)*/
-/*KG_MAP_TYPEDEF(i32, i32)*/
-/*KG_MAP_TYPEDEF(u32, u32)*/
-/*KG_MAP_TYPEDEF(i64, i64)*/
-/*KG_MAP_TYPEDEF(u64, u64)*/
-/*KG_MAP_TYPEDEF(f32, f32)*/
-/*KG_MAP_TYPEDEF(f64, f64)*/
-/*KG_MAP_TYPEDEF(isize, isize)*/
-/*KG_MAP_TYPEDEF(usize, usize)*/
-/*KG_MAP_TYPEDEF(kg_string_t, string)*/
-/*KG_MAP_TYPEDEF(kg_str_t, str)*/
-/*KG_MAP_TYPEDEF(const char*, cstr)*/
-/*KG_MAP_TYPEDEF(const void*, void)*/
 
 typedef struct kg_darray_header_t {
     isize           len;
@@ -1842,23 +1779,6 @@ void* kg_darray_ensure_available2_(kg_darray_base_t* b, isize n, void** out_ptr)
     return *out_ptr;
 }
 
-/*void* kg_map_create_(kg_allocator_t* a, isize item_size, kg_map_base_t* out_b) {*/
-/*    void* out_mem = kg_allocator_alloc(a, item_size);*/
-/*    return out_mem;*/
-/*}*/
-/*void* kg_map_resize_(kg_map_base_t* b) {*/
-/*]*/
-/*usize kg_map_hash_(const kg_str_t key) {*/
-/*}*/
-/*void* kg_map_put_(kg_map_base_t* b, const kg_str_t key, void* value) {*/
-/*}*/
-/*void* kg_map_get_(kg_map_base_t* b, const kg_str_t key) {*/
-/*}*/
-/*void  kg_map_remove_(kg_map_base_t* b, const kg_str_t key) {*/
-/*}*/
-/*void  kg_map_destroy_(kg_map_base_t* b) {*/
-/*}*/
-
 void* kg_darray_create_(kg_allocator_t* allocator, isize stride, isize cap) {
     void* out_darray = null;
     isize mem_size = kg_sizeof(kg_darray_header_t) + cap * stride;
@@ -2062,6 +1982,17 @@ b32 kg_file_close(kg_file_t* f) {
     return out_ok;
 }
 
+kg_static void kg_time_ltimespec_normalize(struct timespec* ts) {
+    const long REPLACE_THIS_NSEC_PER_SEC = 1e9L;
+    if (ts->tv_nsec >= REPLACE_THIS_NSEC_PER_SEC) {
+        ts->tv_sec += ts->tv_nsec / REPLACE_THIS_NSEC_PER_SEC;
+        ts->tv_nsec = ts->tv_nsec % REPLACE_THIS_NSEC_PER_SEC;
+    } else if (ts->tv_nsec < 0) {
+        long sec_adjust = (-ts->tv_nsec + REPLACE_THIS_NSEC_PER_SEC - 1) / REPLACE_THIS_NSEC_PER_SEC;
+        ts->tv_sec -= sec_adjust;
+        ts->tv_nsec += sec_adjust * REPLACE_THIS_NSEC_PER_SEC;
+    }
+}
 void kg_time_sleep(const kg_duration_t d) {
     struct timespec ts = {
         .tv_sec  = d.sec,
@@ -2086,6 +2017,8 @@ kg_inline kg_time_t kg_time_add(const kg_time_t t, const kg_duration_t d) {
             .tv_nsec = t.monotonic.tv_nsec + d.nsec,
         },
     };
+    kg_time_ltimespec_normalize(&out.wall);
+    kg_time_ltimespec_normalize(&out.monotonic);
     return out;
 }
 kg_inline kg_time_t kg_time_sub(const kg_time_t t, const kg_duration_t d) {
@@ -2139,9 +2072,8 @@ kg_inline kg_duration_t kg_time_diff(const kg_time_t t, const kg_time_t other) {
             .nsec = other.monotonic.tv_nsec - t.monotonic.tv_nsec,
         };
     }
-    kg_printf("kg_time_diff - not done\n");
-    if (out.nsec < 0) {
-        out.sec -= 1;
+    if (t.monotonic.tv_nsec < other.monotonic.tv_nsec) {
+        out.sec--;
         out.nsec += 1e9L;
     }
     return out;
@@ -2165,15 +2097,16 @@ kg_string_t kg_time_now_as_string(kg_allocator_t* a) {
     kg_assert(kg_time_to_cstr(now, out) < KG_TIME_MAX_CHARS_LEN);
     return out;
 }
+// replace this with buffer + buffer size
 isize kg_time_to_cstr(const kg_time_t t, char* b) {
     isize out = 0;
     struct tm tm;
     if (null == localtime_r(&t.wall.tv_sec, &tm)) {
         out = 0;
     } else {
-        strftime(b, KG_TIME_MAX_CHARS_LEN, "%Y-%m-%d %H:%M:%S", &tm);
+        out = strftime(b, KG_TIME_MAX_CHARS_LEN, "%Y-%m-%d %H:%M:%S", &tm);
         isize len = kg_cstr_len(b);
-        snprintf(b + len, KG_TIME_MAX_CHARS_LEN - len, ".%09ld", t.wall.tv_nsec);
+        out += snprintf(b + len, KG_TIME_MAX_CHARS_LEN - len, ".%09ld", t.wall.tv_nsec);
     }
     return out;
 }
@@ -2186,11 +2119,11 @@ kg_inline kg_duration_t kg_duration_create(i64 seconds, i64 nanoseconds) {
 kg_inline kg_duration_t kg_duration_from_milliseconds(i64 milliseconds) {
     return (kg_duration_t){
         .sec  = milliseconds / 1000,
-        .nsec = milliseconds % 1000,
+        .nsec = (milliseconds % 1000) * 1e6L,
     };
 }
 kg_inline i64 kg_duration_to_milliseconds(const kg_duration_t d) {
-    return d.sec * 1000;
+    return d.sec * 1000 + d.nsec / 1e6L;
 }
 f64 kg_duration_to_hours(const kg_duration_t d) {
     return kg_cast(f64)d.sec / (60 * 60);
