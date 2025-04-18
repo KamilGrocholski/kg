@@ -313,94 +313,101 @@ isize       kg_string_builder_mem_size        (const kg_string_builder_t* b);
 void        kg_string_builder_reset           (kg_string_builder_t* b);
 void        kg_string_builder_destroy         (kg_string_builder_t* b);
 
-/*typedef struct kg_darray_base_t {*/
-/*    isize           len;*/
-/*    isize           cap;*/
-/*    isize           stride;*/
-/*    kg_allocator_t* allocator;*/
-/*} kg_darray_base_t;*/
-/**/
-/*void* kg_darray_create2_          (kg_allocator_t* a, isize stride, isize cap, kg_darray_base_t* out_b);*/
-/*void* kg_darray_grow2_            (kg_darray_base_t* b, isize n, void** out_ptr);*/
-/*void* kg_darray_ensure_available2_(kg_darray_base_t* b, isize n, void** out_ptr);*/
-/**/
-/*#define KG_DARRAY_TYPEDEF(T, name) \*/
-/*    typedef struct kg_darray_##name##_t { \*/
-/*        kg_darray_base_t base; \*/
-/*        T*               ptr; \*/
-/*    } kg_darray_##name##_t; \*/
-/*    kg_static kg_inline kg_darray_##name##_t kg_darray_##name##_create(kg_allocator_t* a, isize cap) { \*/
-/*        kg_darray_##name##_t out = {0}; \*/
-/*        out.ptr = kg_cast(T*)kg_darray_create2_(a, kg_sizeof(T), cap, &out.base); \*/
-/*        return out; \*/
-/*    } \*/
-/*    kg_static kg_inline b32 kg_darray_##name##_append(kg_darray_##name##_t* d, T v) { \*/
-/*        if (kg_darray_ensure_available2_(&d->base, 1, kg_cast(void**)&d->ptr)) { \*/
-/*            d->ptr[d->base.len] = v; \*/
-/*            d->base.len++; \*/
-/*        } \*/
-/*        return true; \*/
-/*    } \*/
-/*    kg_static kg_inline isize kg_darray_##name##_len(const kg_darray_##name##_t* d) { \*/
-/*        return d ? d->base.len : 0; \*/
-/*    } \*/
-/*    kg_static kg_inline isize kg_darray_##name##_cap(const kg_darray_##name##_t* d) { \*/
-/*        return d ? d->base.cap : 0; \*/
-/*    } \*/
-/*    kg_static kg_inline isize kg_darray_##name##_stride(const kg_darray_##name##_t* d) { \*/
-/*        return d ? d->base.stride : 0; \*/
-/*    } \*/
-/*    kg_static kg_inline isize kg_darray_##name##_available(const kg_darray_##name##_t* d) { \*/
-/*        return d ? d->base.cap - d->base.len : 0; \*/
-/*    } \*/
-/*    kg_static kg_inline b32 kg_darray_##name##_grow(kg_darray_##name##_t* d, isize n) { \*/
-/*        return null != kg_darray_grow2_(&d->base, n, kg_cast(void**)&d->ptr); \*/
-/*    } \*/
-/*    kg_static kg_inline b32 kg_darray_##name##_pop(kg_darray_##name##_t* d) { \*/
-/*        if (d->base.len > 0) { \*/
-/*            d->base.len--; \*/
-/*        } \*/
-/*        return true; \*/
-/*    } \*/
-/*    kg_static kg_inline b32 kg_darray_##name##_swap_remove(kg_darray_##name##_t* d, isize i) { \*/
-/*        if (kg_is_within(i, 0, kg_darray_##name##_len(d) - 1)) { \*/
-/*            kg_mem_swap(d->ptr + i, d->ptr + kg_darray_##name##_len(d), d->base.stride); \*/
-/*            d->base.len--; \*/
-/*        } \*/
-/*        return true; \*/
-/*    } \*/
-/*    kg_static kg_inline isize kg_darray_##name##_mem_size(const kg_darray_##name##_t* d) { \*/
-/*        return kg_darray_##name##_cap(d) * kg_darray_##name##_stride(d); \*/
-/*    } \*/
-/*    kg_static kg_inline void kg_darray_##name##_destroy(kg_darray_##name##_t* d) { \*/
-/*        if (d) { \*/
-/*            kg_allocator_free(d->base.allocator, d->ptr, kg_darray_##name##_mem_size(d)); \*/
-/*            kg_mem_zero(d, kg_sizeof(kg_darray_##name##_t)); \*/
-/*        } \*/
-/*    }*/
-/**/
-/*KG_DARRAY_TYPEDEF(b32, b32)*/
-/*KG_DARRAY_TYPEDEF(i8, i8)*/
-/*KG_DARRAY_TYPEDEF(u8, u8)*/
-/*KG_DARRAY_TYPEDEF(i16, i16)*/
-/*KG_DARRAY_TYPEDEF(u16, u16)*/
-/*KG_DARRAY_TYPEDEF(i32, i32)*/
-/*KG_DARRAY_TYPEDEF(u32, u32)*/
-/*KG_DARRAY_TYPEDEF(i64, i64)*/
-/*KG_DARRAY_TYPEDEF(u64, u64)*/
-/*KG_DARRAY_TYPEDEF(f32, f32)*/
-/*KG_DARRAY_TYPEDEF(f64, f64)*/
-/*KG_DARRAY_TYPEDEF(isize, isize)*/
-/*KG_DARRAY_TYPEDEF(usize, usize)*/
-/*KG_DARRAY_TYPEDEF(kg_string_t, string)*/
-/*KG_DARRAY_TYPEDEF(kg_str_t, str)*/
-/*KG_DARRAY_TYPEDEF(const char*, cstr)*/
-/*KG_DARRAY_TYPEDEF(const void*, void)*/
-/**/
+typedef struct kg_darray_base_t {
+    isize           len;
+    isize           cap;
+    isize           stride;
+    kg_allocator_t* allocator;
+} kg_darray_base_t;
+
+void* kg_darray_create2_          (kg_allocator_t* a, isize stride, isize cap, kg_darray_base_t* out_b);
+void* kg_darray_grow2_            (kg_darray_base_t* b, isize n, void** out_ptr);
+void* kg_darray_grow_formula2_    (kg_darray_base_t* b, isize n, void** out_ptr);
+void* kg_darray_ensure_available2_(kg_darray_base_t* b, isize n, void** out_ptr);
+
+#define KG_DARRAY_TYPEDEF(T, name) \
+    typedef struct kg_darray_##name##_t { \
+        kg_darray_base_t base; \
+        T*               ptr; \
+    } kg_darray_##name##_t; \
+    kg_static kg_inline kg_darray_##name##_t kg_darray_##name##_create(kg_allocator_t* a, isize cap) { \
+        kg_darray_##name##_t out = {0}; \
+        out.ptr = kg_cast(T*)kg_darray_create2_(a, kg_sizeof(T), cap, &out.base); \
+        return out; \
+    } \
+    kg_static kg_inline b32 kg_darray_##name##_append(kg_darray_##name##_t* d, T v) { \
+        if (kg_darray_ensure_available2_(&d->base, 1, kg_cast(void**)&d->ptr)) { \
+            d->ptr[d->base.len] = v; \
+            d->base.len++; \
+            return true; \
+        } \
+        return false; \
+    } \
+    kg_static kg_inline isize kg_darray_##name##_len(const kg_darray_##name##_t* d) { \
+        return d ? d->base.len : 0; \
+    } \
+    kg_static kg_inline isize kg_darray_##name##_cap(const kg_darray_##name##_t* d) { \
+        return d ? d->base.cap : 0; \
+    } \
+    kg_static kg_inline isize kg_darray_##name##_stride(const kg_darray_##name##_t* d) { \
+        return d ? d->base.stride : 0; \
+    } \
+    kg_static kg_inline isize kg_darray_##name##_available(const kg_darray_##name##_t* d) { \
+        return d ? d->base.cap - d->base.len : 0; \
+    } \
+    kg_static kg_inline b32 kg_darray_##name##_grow(kg_darray_##name##_t* d, isize n) { \
+        return null != kg_darray_grow2_(&d->base, n, kg_cast(void**)&d->ptr); \
+    } \
+    kg_static kg_inline b32 kg_darray_##name##_grow_formula(kg_darray_##name##_t* d, isize n) { \
+        return null != kg_darray_grow_formula2_(&d->base, n, kg_cast(void**)&d->ptr); \
+    } \
+    kg_static kg_inline b32 kg_darray_##name##_pop(kg_darray_##name##_t* d) { \
+        if (d->base.len > 0) { \
+            d->base.len--; \
+            return true; \
+        } \
+        return false; \
+    } \
+    kg_static kg_inline b32 kg_darray_##name##_swap_remove(kg_darray_##name##_t* d, isize i) { \
+        if (kg_is_within(i, 0, kg_darray_##name##_len(d) - 1)) { \
+            kg_mem_swap(d->ptr + i, d->ptr + kg_darray_##name##_len(d), d->base.stride); \
+            d->base.len--; \
+            return true; \
+        } \
+        return false; \
+    } \
+    kg_static kg_inline isize kg_darray_##name##_mem_size(const kg_darray_##name##_t* d) { \
+        return kg_darray_##name##_cap(d) * kg_darray_##name##_stride(d); \
+    } \
+    kg_static kg_inline void kg_darray_##name##_destroy(kg_darray_##name##_t* d) { \
+        if (d) { \
+            kg_allocator_free(d->base.allocator, d->ptr, kg_darray_##name##_mem_size(d)); \
+            kg_mem_zero(d, kg_sizeof(kg_darray_##name##_t)); \
+        } \
+    }
+
+KG_DARRAY_TYPEDEF(b32, b32)
+KG_DARRAY_TYPEDEF(i8, i8)
+KG_DARRAY_TYPEDEF(u8, u8)
+KG_DARRAY_TYPEDEF(i16, i16)
+KG_DARRAY_TYPEDEF(u16, u16)
+KG_DARRAY_TYPEDEF(i32, i32)
+KG_DARRAY_TYPEDEF(u32, u32)
+KG_DARRAY_TYPEDEF(i64, i64)
+KG_DARRAY_TYPEDEF(u64, u64)
+KG_DARRAY_TYPEDEF(f32, f32)
+KG_DARRAY_TYPEDEF(f64, f64)
+KG_DARRAY_TYPEDEF(isize, isize)
+KG_DARRAY_TYPEDEF(usize, usize)
+KG_DARRAY_TYPEDEF(kg_string_t, string)
+KG_DARRAY_TYPEDEF(kg_str_t, str)
+KG_DARRAY_TYPEDEF(const char*, cstr)
+KG_DARRAY_TYPEDEF(const void*, void)
+
 /*typedef struct kg_map_kv_t {*/
-/*    const char* key;*/
-/*    void*       value;*/
-/*    b32         is_occupied;*/
+/*    const kg_str_t key;*/
+/*    void*          value;*/
+/*    b32            is_occupied;*/
 /*} kg_map_kv_t;*/
 /**/
 /*typedef struct kg_map_base_t {*/
@@ -409,8 +416,14 @@ void        kg_string_builder_destroy         (kg_string_builder_t* b);
 /*    isize           buckets_n;*/
 /*    isize           item_size;*/
 /*} kg_map_base_t;*/
-
-/*void* kg_map_create_(kg_allocator_t* a);*/
+/**/
+/*void* kg_map_create_ (kg_allocator_t* a, isize item_size, kg_map_base_t* out_b);*/
+/*void* kg_map_resize_ (kg_map_base_t* b);*/
+/*usize kg_map_hash_   (const kg_str_t key);*/
+/*void* kg_map_put_    (kg_map_base_t* b, const kg_str_t key, void* value);*/
+/*void* kg_map_get_    (kg_map_base_t* b, const kg_str_t key);*/
+/*void  kg_map_remove_ (kg_map_base_t* b, const kg_str_t key);*/
+/*void  kg_map_destroy_(kg_map_base_t* b);*/
 /**/
 /*#define KG_MAP_TYPEDEF(T, name) \*/
 /*    typedef struct kg_map_##name##_t { \*/
@@ -419,25 +432,23 @@ void        kg_string_builder_destroy         (kg_string_builder_t* b);
 /*    } kg_map_##name##_t; \*/
 /*    kg_static kg_inline kg_map_##name##_t kg_map_##name##_create(kg_allocator_t* a) { \*/
 /*        kg_map_##name##_t out = {0}; \*/
+/*        kg_map_create_(a, kg_sizeof(T), &out); \*/
 /*        return out; \*/
 /*    } \*/
-/*    kg_static kg_inline b32 kg_map_##name##_put(kg_map_##name##_t* m, const char* key, T value) { \*/
-/*        kg_cast(void)m; \*/
-/*        kg_cast(void)key; \*/
-/*        kg_cast(void)value; \*/
+/*    kg_static kg_inline b32 kg_map_##name##_put(kg_map_##name##_t* m, const kg_str_t key, T value) { \*/
+/*        kg_map_put_(&m->base, key,v value, &value); \*/
 /*        return true; \*/
 /*    } \*/
-/*    kg_static kg_inline T* kg_map_##name##_get(kg_map_##name##_t* m, const char* key) { \*/
-/*        kg_cast(void)m; \*/
-/*        kg_cast(void)key; \*/
-/*        return null; \*/
+/*    kg_static kg_inline T* kg_map_##name##_get(kg_map_##name##_t* m, const kg_str_T key) { \*/
+/*        return kg_cast(T*)kg_map_get_(&m->base, key,v value); \*/
 /*    } \*/
-/*    kg_static kg_inline void kg_map_##name##_remove(kg_map_##name##_t* m, const char* key) { \*/
-/*        kg_cast(void)m; \*/
-/*        kg_cast(void)key; \*/
+/*    kg_static kg_inline void kg_map_##name##_remove(kg_map_##name##_t* m, const kg_str_t key) { \*/
+/*        kg_map_remove_(&m->base, key,v value); \*/
 /*    } \*/
 /*    kg_static kg_inline void kg_map_##name##_destroy(kg_map_##name##_t* m) { \*/
-/*        kg_cast(void)m; \*/
+/*        if (m) { \*/
+/*            kg_map_destroy_(&m->base); \*/
+/*        } \*/
 /*    } \*/
 /**/
 /*KG_MAP_TYPEDEF(b32, b32)*/
@@ -486,11 +497,11 @@ void*   kg_darray_grow_                  (void* d, isize n);
 #define kg_darray_stride(d)              (d ? kg_darray_header(d)->stride : 0)
 #define kg_darray_allocator(d)           (d ? kg_darray_header(d)->allocator : null)
 #define kg_darray_grow(d, n)             do { (d) = kg_darray_grow_(d, n); } while(0)
-#define kg_darray_grow_formula(n, min)   kg_cast(isize)((n * 2) + min)
+#define kg_darray_grow_formula(d, n)     do { (d) = kg_darray_grow_(d, kg_darray_cap(d) * 2 + n); } while(0)
 #define kg_darray_available(d)           (kg_darray_cap(d) > kg_darray_len(d) ? kg_darray_cap(d) - kg_darray_len(d) : 0)
 #define kg_darray_ensure_available(d, n) do { \
     if (kg_darray_available(d) < n) { \
-        kg_darray_grow(d, kg_darray_grow_formula(kg_darray_cap(d), n)); \
+        kg_darray_grow_formula(d, n); \
     } \
 } while(0)
 #define kg_darray_mem_size(d)            (kg_sizeof(kg_darray_header_t) + kg_darray_cap(d) * kg_darray_stride(d))
@@ -569,13 +580,13 @@ typedef enum kg_month_t {
 } kg_month_t;
 
 typedef enum kg_weekday_t {
-    KG_WEEKDAY_SUNDAY    = 0, 
+    KG_WEEKDAY_SUNDAY    = 0,
     KG_WEEKDAY_MONDAY,
-	KG_WEEKDAY_TUESDAY,
-	KG_WEEKDAY_WEDNESDAY,
-	KG_WEEKDAY_THURSDAY,
-	KG_WEEKDAY_FRIDAY,
-	KG_WEEKDAY_SATURDAY,
+    KG_WEEKDAY_TUESDAY,
+    KG_WEEKDAY_WEDNESDAY,
+    KG_WEEKDAY_THURSDAY,
+    KG_WEEKDAY_FRIDAY,
+    KG_WEEKDAY_SATURDAY,
 } kg_weekday_t;
 
 const u64 KG_NANOSECOND  = 1;
@@ -609,7 +620,7 @@ i64           kg_duration_to_seconds       (const kg_duration_t d);
 kg_string_t   kg_duration_to_string        (const kg_duration_t d, kg_allocator_t* a);
 isize         kg_duration_to_cstr          (const kg_duration_t d, char* b);
 
-f64 kg_math_pow(f64 base, f64 exponent);
+f64   kg_math_pow  (f64 base, f64 exponent);
 
 #ifdef KG_IMPL
 
@@ -1798,34 +1809,54 @@ void kg_string_builder_destroy(kg_string_builder_t* b) {
     }
 }
 
-/*void* kg_darray_create2_(kg_allocator_t* a, isize stride, isize cap, kg_darray_base_t* out_b) {*/
-/*    void* out_ptr = kg_allocator_alloc(a, cap * stride);*/
-/*    if (out_ptr) {*/
-/*        out_b->allocator = a;*/
-/*        out_b->stride    = stride;*/
-/*        out_b->cap       = cap;*/
-/*        out_b->len       = 0;*/
-/*    }*/
-/*    return out_ptr;*/
+void* kg_darray_create2_(kg_allocator_t* a, isize stride, isize cap, kg_darray_base_t* out_b) {
+    void* out_ptr = kg_allocator_alloc(a, cap * stride);
+    if (out_ptr) {
+        out_b->allocator = a;
+        out_b->stride    = stride;
+        out_b->cap       = cap;
+        out_b->len       = 0;
+    }
+    return out_ptr;
+}
+void* kg_darray_grow2_(kg_darray_base_t* b, isize n, void** out_ptr) {
+    void* out_new_ptr = null;
+    isize old_mem_size = b->cap * b->stride;
+    isize new_mem_size = old_mem_size + n * b->stride;
+    out_new_ptr = kg_allocator_resize(b->allocator, *out_ptr, old_mem_size, new_mem_size);
+    if (out_new_ptr) {
+        *out_ptr = out_new_ptr;
+        b->cap += n;
+    }
+    return out_new_ptr;
+}
+void* kg_darray_grow_formula2_(kg_darray_base_t* b, isize n, void** out_ptr) {
+    return kg_darray_grow2_(b, b->cap + n, out_ptr);
+}
+void* kg_darray_ensure_available2_(kg_darray_base_t* b, isize n, void** out_ptr) {
+    if (b->len + n > b->cap) {
+        if (!kg_darray_grow_formula2_(b, n, out_ptr)) {
+            return null;
+        }
+    }
+    return *out_ptr;
+}
+
+/*void* kg_map_create_(kg_allocator_t* a, isize item_size, kg_map_base_t* out_b) {*/
+/*    void* out_mem = kg_allocator_alloc(a, item_size);*/
+/*    return out_mem;*/
 /*}*/
-/*void* kg_darray_grow2_(kg_darray_base_t* b, isize n, void** out_ptr) {*/
-/*    void* out_new_ptr = null;*/
-/*    isize old_mem_size = b->cap * b->stride;*/
-/*    isize new_mem_size = old_mem_size + n * b->stride;*/
-/*    out_new_ptr = kg_allocator_resize(b->allocator, *out_ptr, old_mem_size, new_mem_size);*/
-/*    if (out_new_ptr) {*/
-/*        *out_ptr = out_new_ptr;*/
-/*        b->cap += n;*/
-/*    }*/
-/*    return out_new_ptr;*/
+/*void* kg_map_resize_(kg_map_base_t* b) {*/
+/*]*/
+/*usize kg_map_hash_(const kg_str_t key) {*/
 /*}*/
-/*void* kg_darray_ensure_available2_(kg_darray_base_t* b, isize n, void** out_ptr) {*/
-/*    if (b->len + n > b->cap) {*/
-/*        if (!kg_darray_grow2_(b, n, out_ptr)) {*/
-/*            return null;*/
-/*        }*/
-/*    }*/
-/*    return *out_ptr;*/
+/*void* kg_map_put_(kg_map_base_t* b, const kg_str_t key, void* value) {*/
+/*}*/
+/*void* kg_map_get_(kg_map_base_t* b, const kg_str_t key) {*/
+/*}*/
+/*void  kg_map_remove_(kg_map_base_t* b, const kg_str_t key) {*/
+/*}*/
+/*void  kg_map_destroy_(kg_map_base_t* b) {*/
 /*}*/
 
 void* kg_darray_create_(kg_allocator_t* allocator, isize stride, isize cap) {
@@ -2169,6 +2200,12 @@ i64 kg_duration_to_seconds(const kg_duration_t d) {
 }
 kg_string_t kg_duration_to_string(const kg_duration_t d, kg_allocator_t* a) {
     return kg_string_from_fmt(a, "%llu sec %lli nsec", d.sec, d.nsec);
+}
+isize kg_duration_to_cstr(const kg_duration_t d, char* b) {
+    kg_panic("kg_duration_to_cstr - not implemented");
+    kg_cast(void)d;
+    kg_cast(void)b;
+    return 0;
 }
 
 kg_inline f64 kg_math_pow(f64 base, f64 exponent) {
@@ -2728,10 +2765,9 @@ typedef struct kg_logger_context_t {
 #ifdef KG_THREADS
     kg_mutex_t mutex;
 #endif
-    kg_allocator_t allocator;
 } kg_logger_context_t;
 
-void kg_logger_setup(kg_allocator_t* a);
+void kg_logger_setup(void);
 void kg_log_handler (kg_log_level_t level, const char* file, i64 line, const char* fmt, ...);
 
 #if KG_LOG_NONE != 1 && KG_LOG_RAW == 1
@@ -2775,15 +2811,10 @@ void kg_log_handler (kg_log_level_t level, const char* file, i64 line, const cha
 #ifdef KG_THREADS
 kg_static kg_logger_context_t kg_logger_context;
 #endif
-void kg_logger_setup(kg_allocator_t* a) {
+void kg_logger_setup(void) {
 #ifdef KG_THREADS
     kg_mutex_create(&kg_logger_context.mutex);
 #endif
-    if (a) {
-        kg_logger_context.allocator = *a;
-    } else {
-        kg_logger_context.allocator = kg_allocator_default();
-    }
 }
 void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char* fmt, ...) {
 #ifdef KG_THREADS
@@ -2809,7 +2840,7 @@ void kg_log_handler(kg_log_level_t level, const char* file, i64 line, const char
         [KG_LOG_LEVEL_ERROR] = "\x1b[31m",
         [KG_LOG_LEVEL_FATAL] = "\x1b[35m",
     };
-    kg_allocator_t allocator = kg_logger_context.allocator;
+    kg_allocator_t allocator = kg_allocator_default();
     kg_string_builder_t sb;
     if (kg_string_builder_create(&sb, &allocator, 128)) {
         if (level != KG_LOG_LEVEL_RAW) {

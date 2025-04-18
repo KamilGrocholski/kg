@@ -51,20 +51,20 @@ void test_darray() {
 }
 
 void test_darray2() {
-    /*kg_allocator_t allocator = kg_allocator_default();*/
-    /*kg_darray_isize_t ns = kg_darray_isize_create(&allocator, 64);*/
-    /*kgt_expect_not_null(ns.ptr);*/
-    /*for (isize i = 0; i < 4; i++) {*/
-    /*    kgt_expect_true(kg_darray_isize_append(&ns, i));*/
-    /*    kgt_expect_not_null(ns.ptr);*/
-    /*}*/
-    /*kgt_expect_not_null(ns.ptr);*/
-    /*for (isize i = 0; i < kg_darray_isize_len(&ns); i++) {*/
-    /*    kgt_expect_eq(ns.ptr[i], i);*/
-    /*}*/
-    /*kg_darray_isize_swap_remove(&ns, 1);*/
-    /*kg_darray_isize_pop(&ns);*/
-    /*kg_darray_isize_destroy(&ns);*/
+    kg_allocator_t allocator = kg_allocator_default();
+    kg_darray_isize_t ns = kg_darray_isize_create(&allocator, 64);
+    kgt_expect_not_null(ns.ptr);
+    for (isize i = 0; i < 4; i++) {
+        kgt_expect_true(kg_darray_isize_append(&ns, i));
+        kgt_expect_not_null(ns.ptr);
+    }
+    kgt_expect_not_null(ns.ptr);
+    for (isize i = 0; i < kg_darray_isize_len(&ns); i++) {
+        kgt_expect_eq(ns.ptr[i], i);
+    }
+    kgt_expect_true(kg_darray_isize_swap_remove(&ns, 1));
+    kgt_expect_true(kg_darray_isize_pop(&ns));
+    kg_darray_isize_destroy(&ns);
 }
 
 void test_map() {
