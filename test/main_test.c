@@ -50,6 +50,30 @@ void test_darray() {
     kg_darray_destroy(d);
 }
 
+void test_darray2() {
+    /*kg_allocator_t allocator = kg_allocator_default();*/
+    /*kg_darray_isize_t ns = kg_darray_isize_create(&allocator, 64);*/
+    /*kgt_expect_not_null(ns.ptr);*/
+    /*for (isize i = 0; i < 4; i++) {*/
+    /*    kgt_expect_true(kg_darray_isize_append(&ns, i));*/
+    /*    kgt_expect_not_null(ns.ptr);*/
+    /*}*/
+    /*kgt_expect_not_null(ns.ptr);*/
+    /*for (isize i = 0; i < kg_darray_isize_len(&ns); i++) {*/
+    /*    kgt_expect_eq(ns.ptr[i], i);*/
+    /*}*/
+    /*kg_darray_isize_swap_remove(&ns, 1);*/
+    /*kg_darray_isize_pop(&ns);*/
+    /*kg_darray_isize_destroy(&ns);*/
+}
+
+void test_map() {
+    /*kg_allocator_t allocator = kg_allocator_default();*/
+    /*kg_map_isize_t ns = kg_map_isize_create(&allocator);*/
+    /*kg_map_isize_put(&ns, "key", 4);*/
+    /*kg_map_isize_destroy(&ns);*/
+}
+
 void test_file_read_contant() {
     kg_allocator_t allocator = kg_allocator_default();
     kg_file_content_t content = kg_file_content_read(&allocator, "./test/test.txt");
@@ -648,6 +672,7 @@ int main() {
         kgt_register(test_allocator_default),
         kgt_register(test_mem_swap),
         kgt_register(test_darray),
+        kgt_register(test_darray2),
         kgt_register(test_file_read_contant),
         kgt_register(test_string_from_cstr),
         kgt_register(test_string_from_fmt),

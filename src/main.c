@@ -31,7 +31,7 @@ void* task_without_mutex(void* arg) {
 i32 main(i32 argc, char* argv[]) {
     kg_allocator_t allocator = kg_allocator_default();
 
-    kg_logger_create();
+    kg_logger_setup(&allocator);
 
     kg_string_t time_string = kg_time_now_as_string(&allocator);
     kg_log("%s", time_string);
