@@ -120,9 +120,9 @@ typedef struct kg_allocator_t kg_allocator_t;
 
 typedef struct kg_arena_t {
     kg_allocator_t* allocator;
-    void*           real_ptr;
     isize           max_size;
     isize           allocated_size;
+    void*           real_ptr;
 } kg_arena_t;
 
 b32   kg_arena_create   (kg_arena_t* a, kg_allocator_t* allocator, isize max_size);
@@ -132,8 +132,20 @@ isize kg_arena_mem_size (const kg_arena_t* a);
 void  kg_arena_reset    (kg_arena_t* a);
 void  kg_arena_destroy  (kg_arena_t* a);
 
-kg_allocator_t kg_allocator_default(void);
-kg_allocator_t kg_allocator_temp   (kg_arena_t* a);
+kg_allocator_t kg_allocator_default (void);
+kg_allocator_t kg_allocator_temp    (kg_arena_t* a);
+typedef struct kg_allocator_tracking_context_t {
+    const char*     name;
+    kg_allocator_t* parent_allocator;
+    isize           total_allocated;
+    isize           total_freed;
+    isize           current_allocated;
+    isize           alloc_count;
+    isize           free_count;
+    isize           resize_count;
+} kg_allocator_tracking_context_t;
+void           kg_allocator_tracking_context_print(const kg_allocator_tracking_context_t ctx);
+kg_allocator_t kg_allocator_tracking(kg_allocator_tracking_context_t* ctx);
 
 #define kg_allocator_alloc_one(a, T)      (T*)(kg_allocator_alloc(a, kg_sizeof(T)))
 #define kg_allocator_alloc_array(a, T, n) (T*)(kg_allocator_alloc(a, kg_sizeof(T) * n))
@@ -647,6 +659,64 @@ kg_inline kg_allocator_t kg_allocator_default(void) {
             .resize   = kg_allocator_default_resize,
         },
         .context = null,
+    };
+}
+
+void* kg_allocator_tracking_alloc(kg_allocator_t* a, isize size) {
+    kg_allocator_tracking_context_t* ctx = kg_cast(kg_allocator_tracking_context_t*)a->context;
+    void* out_ptr = kg_allocator_alloc(ctx->parent_allocator, size);
+    if (out_ptr) {
+        ctx->total_allocated += size;
+        ctx->current_allocated = ctx->total_allocated - ctx->total_freed;
+        kg_printf("[allocator](%s) Alloc %zu bytes at %p\n", ctx->name, (size_t)size, out_ptr);
+    }
+    return out_ptr;
+}
+void kg_allocator_tracking_free(kg_allocator_t* a, void* ptr, isize size) {
+    kg_allocator_tracking_context_t* ctx = kg_cast(kg_allocator_tracking_context_t*)a->context;
+    if (ptr) {
+        ctx->total_freed += size;
+        ctx->current_allocated = ctx->total_allocated - ctx->total_freed;
+        kg_allocator_free(ctx->parent_allocator, ptr, size);
+        kg_printf("[allocator](%s) Free %zu bytes at %p\n", ctx->name, size, ptr);
+    }
+}
+void kg_allocator_tracking_free_all(kg_allocator_t* a, b32 clear) {
+    kg_allocator_tracking_context_t* ctx = kg_cast(kg_allocator_tracking_context_t*)a->context;
+    ctx->total_freed = ctx->total_allocated;
+    ctx->current_allocated = 0;
+    kg_allocator_free_all(ctx->parent_allocator, clear);
+    kg_printf("[allocator](%s) Free all (clear=%s)\n", ctx->name, clear ? "true" : "false");
+}
+void* kg_allocator_tracking_resize(kg_allocator_t* a, void* ptr, isize old_size, isize new_size) {
+    kg_allocator_tracking_context_t* ctx = kg_cast(kg_allocator_tracking_context_t*)a->context;
+    void* out_ptr = null;
+    if (ptr) {
+        out_ptr = kg_allocator_resize(ctx->parent_allocator, ptr, old_size, new_size);
+        if (out_ptr) {
+            ctx->total_allocated += new_size;
+            ctx->total_freed += old_size;
+            ctx->current_allocated = ctx->total_allocated - ctx->total_freed;
+            kg_printf("[allocator](%s) Resize from %zu to %zu bytes, ptr %p -> %p\n", ctx->name, (size_t)old_size, (size_t)new_size, ptr, out_ptr);
+        }
+    }
+    return out_ptr;
+}
+void kg_allocator_tracking_context_print(const kg_allocator_tracking_context_t ctx) {
+    kg_printf("[allocator](%s)\n\tparent_allocator:  %p\n\ttotal_allocated:   %lliB\n\ttotal_freed:       %lliB\n\tcurrent_allocated: %lliB\n", ctx.name, ctx.parent_allocator, ctx.total_allocated, ctx.total_freed, ctx.current_allocated);
+}
+kg_inline kg_allocator_t kg_allocator_tracking(kg_allocator_tracking_context_t* ctx) {
+    kg_assert(ctx);
+    kg_assert(ctx->parent_allocator);
+    kg_assert(ctx->name);
+    return (kg_allocator_t){
+        .proc = {
+            .alloc    = kg_allocator_tracking_alloc,
+            .free     = kg_allocator_tracking_free,
+            .free_all = kg_allocator_tracking_free_all,
+            .resize   = kg_allocator_tracking_resize,
+        },
+        .context = ctx,
     };
 }
 
@@ -1467,7 +1537,7 @@ isize kg_utf8_decode_rune(rune* r, u8* b, isize b_len) {
     const u8 maskx = 0x3f;
     isize bytes = 0;
     rune c = KG_RUNE_INVALID;
-    if (b_len < 0 || b == null) {
+    if (b_len <= 0 || b == null) {
         c = KG_RUNE_INVALID;
         bytes = 0;
     } else if ((b[0] >> 7) == 0) {
@@ -1532,7 +1602,7 @@ isize kg_utf8_encode_rune(u8 b[4], rune r) {
     if (i <= 0x7f) {
         b[0] = kg_cast(u8)r;
         bytes = 1;
-    } else if (i <= (1<<11)-1) {
+    } else if (i <= KG_RUNE_2_MAX) {
         b[0] = 0xc0 | (kg_cast(u8)(r >> 6));
         b[1] = 0x80 | (kg_cast(u8)(r)       & maskx);
         bytes = 2;
@@ -1542,18 +1612,20 @@ isize kg_utf8_encode_rune(u8 b[4], rune r) {
         b[1] = 0x80 | (kg_cast(u8)(r >> 6)  & maskx);
         b[2] = 0x80 | (kg_cast(u8)(r)       & maskx);
         bytes = 3;
-    } else if (i <= (1<<16)-1) {
+    } else if (i <= KG_RUNE_3_MAX) {
         b[0] = 0xe0 | (kg_cast(u8)(r >> 12));
         b[1] = 0x80 | (kg_cast(u8)(r >> 6)  & maskx);
         b[2] = 0x80 | (kg_cast(u8)(r)       & maskx);
         bytes = 3;
-    } else {
+    } else if (i <= KG_RUNE_MAX) {
         b[0] = 0xf0 | (kg_cast(u8)(r >> 18));
         b[1] = 0x80 | (kg_cast(u8)(r >> 12) & maskx);
         b[2] = 0x80 | (kg_cast(u8)(r >> 6)  & maskx);
         b[3] = 0x80 | (kg_cast(u8)(r)       & maskx);
         bytes = 4;
-    } 
+    } else {
+        bytes = 0;
+    }
     return bytes;
 }
 kg_inline b32 kg_rune_is_valid(rune r) {
@@ -2873,9 +2945,9 @@ kgt_test_t kgt_register(kgt_fn_t fn);
 void       kgt_run     (kgt_t* t, kgt_test_t* tests, isize tests_len);
 void       kgt_destroy (kgt_t* t);
 
-void kgt_expect_handler(const char* cond, const char* msg, const char* file, isize line);
+void kgt_expect_handler(const char* cond, const char* msg, const char* file, isize line, const char* fn_name);
 
-#define kgt_expect(cond, msg)          if (cond) {} else { kgt_expect_handler(#cond, msg, __FILE__, kg_cast(isize)__LINE__); }
+#define kgt_expect(cond, msg)          if (cond) {} else { kgt_expect_handler(#cond, msg, __FILE__, kg_cast(isize)__LINE__, __func__); }
 #define kgt_expect_null(a)             kgt_expect(a == null, "expected null")
 #define kgt_expect_not_null(a)         kgt_expect(a != null, "expected not null")
 #define kgt_expect_eq(a, b)            kgt_expect(a == b, "expected eq")
@@ -2899,8 +2971,8 @@ void kgt_expect_handler(const char* cond, const char* msg, const char* file, isi
 
 #ifdef KG_TESTER_IMPL
 
-void kgt_expect_handler(const char* cond, const char* msg, const char* file, isize line) {
-    kg_printf("Test failed: (%s:%li) %s %s\n", file, line, msg, cond);
+void kgt_expect_handler(const char* cond, const char* msg, const char* file, isize line, const char* fn_name) {
+    kg_printf("\x1b[31m[test_failed]\x1b[0m %s (%s:%li) %s %s\n", fn_name, file, line, msg, cond);
     /*kg_exit(1);*/
 }
 

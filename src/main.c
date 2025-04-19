@@ -29,13 +29,21 @@ void* task_without_mutex(void* arg) {
 }
 
 i32 main(i32 argc, char* argv[]) {
-    kg_allocator_t allocator = kg_allocator_default();
+    kg_allocator_t parent_allocator = kg_allocator_default();
+    kg_allocator_tracking_context_t ctx = {
+        .name             = "root",
+        .parent_allocator = &parent_allocator,
+    };
+    kg_allocator_t allocator = kg_allocator_tracking(&ctx);
 
     kg_logger_setup();
 
     kg_string_t time_string = kg_time_now_as_string(&allocator);
+    kg_allocator_tracking_context_print(ctx);
     kg_log("%s", time_string);
     kg_string_destroy(time_string);
+
+    kg_allocator_tracking_context_print(ctx);
 
     b32 help_flag;
     kg_str_t str_flag;
@@ -84,6 +92,8 @@ i32 main(i32 argc, char* argv[]) {
 
     kg_pool_destroy(&p);
     kg_mutex_destroy(&task_data.mutex);
+
+    kg_allocator_tracking_context_print(ctx);
 
     kg_log("RAW");
     kg_log_trace("TRACE");

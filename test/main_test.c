@@ -568,13 +568,16 @@ void test_string_builder() {
 }
 
 void test_uft8() {
-    /*rune r_in = 0x015b;*/
-    /*rune r_in = 0x0041;*/
-    /*u8 buf[4] = {0};*/
-    /*isize bytes = kg_utf8_encode_rune(buf, r_in);*/
-    /*rune r_out = kg_utf8_decode_rune(buf);*/
-    /*kg_printf("r_in: %d, r_out: %d, bytes: %li, buf: '%s'\n", r_in, r_out, bytes, buf);*/
-    /*kg_printf("r_in: %d, r_out: %d, bytes: %li, buf: '%s'\n", r_in, r_out, bytes, buf);*/
+    rune r_in = 0x015b;
+    u8 buf[4] = {0};
+    isize bytes_in = kg_utf8_encode_rune(buf, r_in);
+    kgt_expect_eq(bytes_in, 2);
+    kgt_expect_eq(buf[0], 0xc5);
+    kgt_expect_eq(buf[1], 0x9b);
+    rune r_out = KG_RUNE_INVALID;
+    isize bytes_out = kg_utf8_decode_rune(&r_out, buf, 2);
+    kgt_expect_eq(bytes_out, 2);
+    kgt_expect_eq(r_out, r_in);
 }
 
 void test_utf8_decode_rune() {
