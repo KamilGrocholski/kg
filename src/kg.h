@@ -1459,51 +1459,69 @@ kg_static kg_inline b32 kg_utf8_is_cont(u8 b) {
     return kg_is_within(b, 0x80, 0xbf);
 }
 isize kg_utf8_decode_rune(rune* r, u8* b, isize b_len) {
-    kg_printf("kg_utf8_decode_rune - not done\n");
-    kg_static const u8 maskx = 0x3f;
+    kg_printf("%s - understand and replace it with this -> https://go.dev/src/unicode/utf8/utf8.go\n", __func__);
+    const u8 maskx = 0x3f;
     isize bytes = 0;
-    if (b[0] > 0 && b[0] <= 0x7f) {
-        bytes = 1;
-        *r = kg_cast(rune)b[0];
-    } else if ((b[0] & 0xe0) == 0xc0 && b_len > 1 && kg_utf8_is_cont(b[1])) {
-        *r =  (kg_cast(rune)(b[0] & 0x3f ) << 6) 
-            |  kg_cast(rune)(b[1] & maskx);
-        if (*r < 0x80) {
-            *r = KG_RUNE_INVALID;
-        } else {
-            bytes = 2;
+    rune c = KG_RUNE_INVALID;
+    if (b_len < 0 || b == null) {
+        c = KG_RUNE_INVALID;
+        bytes = 0;
+    } else if ((b[0] >> 7) == 0) {
+        if (b_len >= 1) {
+            c = kg_cast(rune)b[0];
+            bytes = 1;
         }
-    } else if ((b[0] & 0xf0) == 0xe0 && b_len > 2 && kg_utf8_is_cont(b[1]) && kg_utf8_is_cont(b[2])) {
-        *r =  (kg_cast(rune)(b[0] & 0x1f ) << 12) 
-            | (kg_cast(rune)(b[1] & maskx) << 6) 
-            |  kg_cast(rune)(b[2] & maskx);
-        if (*r < 0x800 && (*r >= 0xd800 && *r <= 0xdfff)) {
-            *r = KG_RUNE_INVALID;
-        } else {
-            bytes = 3;
+    } else if ((b[0] & 0xe0) == 0xc0) {
+        if (b_len >= 2 && kg_utf8_is_cont(b[1])) {
+            c = ((kg_cast(rune)b[0] & 0x1f) << 6)
+                | (kg_cast(rune)b[1] & maskx);
+            if (c < 0x80) {
+                c = KG_RUNE_INVALID;
+                bytes = 0;
+            } else {
+                bytes = 2;
+            }
         }
-    } else if ((b[0] & 0xf8) == 0xf0 && b_len > 3 && kg_utf8_is_cont(b[1]) && kg_utf8_is_cont(b[2]) && kg_utf8_is_cont(b[3])) {
-        *r =  (kg_cast(rune)(b[0] & 0x0f ) << 18) 
-            | (kg_cast(rune)(b[1] & maskx) << 12) 
-            | (kg_cast(rune)(b[2] & maskx) << 6) 
-            |  kg_cast(rune)(b[3] & maskx);
-        if (*r < 0x10ffff && *r < 0x10000) {
-            *r = KG_RUNE_INVALID;
-        } else {
-            bytes = 4;
+    } else if ((b[0] & 0xf0) == 0xe0) {
+        if (b_len >= 3 && kg_utf8_is_cont(b[1]) && kg_utf8_is_cont(b[2])) {
+            c = ((kg_cast(rune)b[0] & 0x0f) << 12)
+                | ((kg_cast(rune)b[1] & maskx) << 6)
+                | (kg_cast(rune)b[2] & maskx);
+            if (c < 0x800) {
+                c = KG_RUNE_INVALID;
+                bytes = 0;
+            } else if (c >= 0xd800 && c <= 0xdfff) {
+                c = KG_RUNE_INVALID;
+                bytes = 0;
+            } else {
+                bytes = 3;
+            }
+        }
+    } else if ((b[0] & 0xf8) == 0xf0) {
+        if (b_len >= 4 && kg_utf8_is_cont(b[1]) && kg_utf8_is_cont(b[2]) && kg_utf8_is_cont(b[3])) {
+            c = ((kg_cast(rune)b[0] & 0x07) << 18)
+                | ((kg_cast(rune)b[1] & maskx) << 12)
+                | ((kg_cast(rune)b[2] & maskx) << 6)
+                | (kg_cast(rune)b[3] & maskx);
+            if (c < 0x10000 || c > 0x10ffff) {
+                c = KG_RUNE_INVALID;
+                bytes = 0;
+            } else {
+                bytes = 4;
+            }
         }
     } else {
-        bytes = 0;
-        *r = KG_RUNE_INVALID;
+        c = KG_RUNE_INVALID;
     }
-    if (!kg_rune_is_valid(*r)) {
+    if (!kg_rune_is_valid(c)) {
         bytes = 0;
-        *r = KG_RUNE_INVALID;
+        c = KG_RUNE_INVALID;
     }
+    *r = c;
     return bytes;
 }
 isize kg_utf8_encode_rune(u8 b[4], rune r) {
-    kg_printf("kg_utf8_encode_rune - not done\n");
+    kg_printf("%s - understand and replace it with this -> https://go.dev/src/unicode/utf8/utf8.go\n", __func__);
     u32 i = kg_cast(u32)r;
     kg_static const u8 maskx = 0x3f;
     isize bytes;

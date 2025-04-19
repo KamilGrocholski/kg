@@ -605,7 +605,7 @@ void test_utf8_decode_rune() {
         kgt_expect_eq(r, cases[i].expected_r);
         kgt_expect_eq(bytes, cases[i].expected_bytes);
 
-        if (cases[i].expected_bytes > 0) {
+        if (cases[i].expected_bytes >= 0) {
             kgt_expect_true(kg_rune_is_valid(r));
         } else {
             kgt_expect_false(kg_rune_is_valid(r));
@@ -614,6 +614,15 @@ void test_utf8_decode_rune() {
 }
 
 void test_uft8_encode_rune() {
+    rune r = 0x15b;
+    isize bytes;
+    u8 buf[4] = {0};
+    bytes = kg_utf8_encode_rune(buf, r);
+    kgt_expect_eq(bytes, 2);
+    kgt_expect_eq(buf[0], 0xc5);
+    kgt_expect_eq(buf[1], 0x9b);
+    kgt_expect_eq(buf[2], 0);
+    kgt_expect_eq(buf[3], 0);
 }
 
 void test_string_append_rune() {
