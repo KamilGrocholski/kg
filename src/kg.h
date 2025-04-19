@@ -72,8 +72,6 @@ typedef ptrdiff_t isize;
 
 #define KG_RUNE_INVALID       kg_cast(rune)(0xfffd)
 #define KG_RUNE_MAX           kg_cast(rune)(0x0010ffff)
-#define KG_RUNE_SURROGATE_MIN kg_cast(rune)(0xd800)
-#define KG_RUNE_SURROGATE_MAX kg_cast(rune)(0xdfff)
 
 #define kg_min(x, y)           ((x) < (y) ? (x) : (y))
 #define kg_max(x, y)           ((x) > (y) ? (x) : (y))
@@ -276,6 +274,7 @@ b32  kg_char_is_alphanumeric(char c);
 b32   kg_rune_is_valid   (rune r);
 b32   kg_rune_is_digit   (rune r);
 b32   kg_rune_is_space   (rune r);
+isize kg_rune_len        (rune r);
 isize kg_utf8_decode_rune(rune* r, u8* b, isize b_len);
 isize kg_utf8_encode_rune(u8 b[4], rune r);
 
@@ -1455,6 +1454,11 @@ kg_inline b32 kg_char_is_alphanumeric(char c) {
     return kg_char_is_digit(c) || kg_char_is_alpha(c);
 }
 
+kg_static const rune KG_RUNE_SURROGATE_MIN = 0xd800;
+kg_static const rune KG_RUNE_SURROGATE_MAX = 0xdfff;
+kg_static const rune KG_RUNE_1_MAX         = (1 << 7 ) - 1;
+kg_static const rune KG_RUNE_2_MAX         = (1 << 11) - 1;
+kg_static const rune KG_RUNE_3_MAX         = (1 << 16) - 1;
 kg_static kg_inline b32 kg_utf8_is_cont(u8 b) {
     return kg_is_within(b, 0x80, 0xbf);
 }
@@ -1591,6 +1595,17 @@ kg_inline b32 kg_rune_is_space(rune r) {
         default:
             return false;
     }
+}
+isize kg_rune_len(rune r) {
+    isize out;
+    if (r < 0) out = -1;
+    else if (r <= KG_RUNE_1_MAX) out = 1;
+    else if (r <= KG_RUNE_2_MAX) out = 2;
+    else if (KG_RUNE_SURROGATE_MIN <= r && r <= KG_RUNE_SURROGATE_MAX) out = -1;
+    else if (r <= KG_RUNE_3_MAX) out = 3;
+    else if (r <= KG_RUNE_MAX) out = 4;
+    else out = -1;
+    return out;
 }
 
 
