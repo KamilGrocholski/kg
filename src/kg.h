@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KG_H
+#define KG_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -188,6 +189,8 @@ typedef struct kg_string_header_t {
     kg_allocator_t* allocator;
 } kg_string_header_t;
 
+typedef struct kg_str_t kg_str_t;
+
 #define kg_string_header(s) (kg_cast(kg_string_header_t*)(s) - 1)
 
 typedef char* kg_string_t;
@@ -196,6 +199,8 @@ kg_string_t kg_string_create          (kg_allocator_t* a, isize cap);
 kg_string_t kg_string_from_unsafe     (kg_allocator_t* a, const void* v, isize v_len);
 kg_string_t kg_string_from_fmt        (kg_allocator_t* a, const char* fmt, ...);
 kg_string_t kg_string_from_fmt_v      (kg_allocator_t* a, const char* fmt, va_list args);
+kg_string_t kg_string_from_str        (kg_allocator_t* a, const kg_str_t s);
+kg_string_t kg_string_from_str_n      (kg_allocator_t* a, const kg_str_t s, isize n);
 kg_string_t kg_string_from_cstr       (kg_allocator_t* a, const char* cstr);
 kg_string_t kg_string_from_cstr_n     (kg_allocator_t* a, const char* cstr, isize cstr_len);
 kg_string_t kg_string_set             (kg_string_t s, const char* cstr);
@@ -537,12 +542,12 @@ typedef enum kg_weekday_t {
     KG_WEEKDAY_SATURDAY,
 } kg_weekday_t;
 
-const u64 KG_NANOSECOND  = 1;
-const u64 KG_MICROSECOND = 1000 * KG_NANOSECOND;
-const u64 KG_MILLISECOND = 1000 * KG_MICROSECOND;
-const u64 KG_SECOND      = 1000 * KG_MILLISECOND;
-const u64 KG_MINUTE      = 60 * KG_SECOND;
-const u64 KG_HOUR        = 60 * KG_MINUTE;
+/*const u64 KG_NANOSECOND  = 1;*/
+/*const u64 KG_MICROSECOND = 1000 * KG_NANOSECOND;*/
+/*const u64 KG_MILLISECOND = 1000 * KG_MICROSECOND;*/
+/*const u64 KG_SECOND      = 1000 * KG_MILLISECOND;*/
+/*const u64 KG_MINUTE      = 60 * KG_SECOND;*/
+/*const u64 KG_HOUR        = 60 * KG_MINUTE;*/
 
 void          kg_time_sleep        (const kg_duration_t d);
 kg_time_t     kg_time_now          (void);
@@ -916,7 +921,13 @@ kg_string_t kg_string_from_fmt_v(kg_allocator_t* a, const char* fmt, va_list arg
     }
     return out_string;
 }
-kg_string_t kg_string_from_cstr(kg_allocator_t* a, const char* cstr) {
+kg_inline kg_string_t kg_string_from_str(kg_allocator_t* a, const kg_str_t s) {
+    return kg_string_from_cstr_n(a, s.ptr, s.len);
+}
+kg_inline kg_string_t kg_string_from_str_n(kg_allocator_t* a, const kg_str_t s, isize n) {
+    return kg_string_from_cstr_n(a, s.ptr, n > s.len ? s.len : n);
+}
+kg_inline kg_string_t kg_string_from_cstr(kg_allocator_t* a, const char* cstr) {
     return kg_string_from_cstr_n(a, cstr, kg_cstr_len(cstr));
 }
 kg_string_t kg_string_from_cstr_n(kg_allocator_t* a, const char* cstr, isize cstr_len) {
@@ -2998,3 +3009,5 @@ void kgt_destroy(kgt_t* t) {
 }
 
 #endif // KG_TESTER_IMPL
+
+#endif // KG_H

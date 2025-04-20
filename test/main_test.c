@@ -90,6 +90,15 @@ void test_string_from_cstr() {
     kg_string_destroy(string);
 }
 
+void test_string_from_str() {
+    kg_allocator_t allocator = kg_allocator_default();
+    kg_str_t str = kg_str_create("test");
+    kg_string_t string = kg_string_from_str(&allocator, str);
+    kgt_expect_eq(kg_string_len(string), str.len);
+    kgt_expect_cstr_n_eq(str.ptr, "test", str.len);
+    kg_string_destroy(string);
+}
+
 void test_string_from_fmt() {
     kg_allocator_t allocator = kg_allocator_default();
     kg_string_t string = kg_string_from_fmt(&allocator, "%s 4", "test", 4);
@@ -687,6 +696,7 @@ int main() {
         kgt_register(test_darray2),
         kgt_register(test_file_read_contant),
         kgt_register(test_string_from_cstr),
+        kgt_register(test_string_from_str),
         kgt_register(test_string_from_fmt),
         kgt_register(test_string_append_cstr),
         kgt_register(test_string_append_fmt),
