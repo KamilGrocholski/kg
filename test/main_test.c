@@ -202,17 +202,17 @@ void test_str_compare() {
 
     a = kg_str_create("testaa");
     b = kg_str_create("test");
-    result = kg_str_compare(a, b);
+    result = kg_str_compare(&a, &b);
     kgt_expect_eq(result, 2);
 
     a = kg_str_create("test");
     b = kg_str_create("testaa");
-    result = kg_str_compare(a, b);
+    result = kg_str_compare(&a, &b);
     kgt_expect_eq(result, -2);
 
     a = kg_str_create("test");
     b = kg_str_create("test");
-    result = kg_str_compare(a, b);
+    result = kg_str_compare(&a, &b);
     kgt_expect_eq(result, 0);
 }
 
@@ -223,17 +223,17 @@ void test_str_compare_n() {
 
     a = kg_str_create("testaa");
     b = kg_str_create("test");
-    result = kg_str_compare_n(a, b, 5);
+    result = kg_str_compare_n(&a, &b, 5);
     kgt_expect_eq(result, 2);
 
     a = kg_str_create("test");
     b = kg_str_create("testaa");
-    result = kg_str_compare_n(a, b, 5);
+    result = kg_str_compare_n(&a, &b, 5);
     kgt_expect_eq(result, -2);
 
     a = kg_str_create("test");
     b = kg_str_create("test");
-    result = kg_str_compare_n(a, b, 4);
+    result = kg_str_compare_n(&a, &b, 4);
     kgt_expect_eq(result, 0);
 }
 
@@ -340,6 +340,19 @@ void test_str_chop_first_split_by() {
     kgt_expect_true(kg_str_is_equal(v, kg_str_create("4")));
     kgt_expect_true(kg_str_is_equal(str, kg_str_create("")));
 
+    kgt_expect_true(kg_str_is_empty(str));
+}
+
+void test_str_chop_first_line() {
+    kg_str_t str = kg_str_create("l1\nl2\nl3");
+    kg_str_t l;
+    l = kg_str_chop_first_line(&str);
+    kgt_expect_cstr_n_eq(l.ptr, "l1", 2);
+    l = kg_str_chop_first_line(&str);
+    kgt_expect_cstr_n_eq(l.ptr, "l2", 2);
+    l = kg_str_chop_first_line(&str);
+    kgt_expect_cstr_n_eq(l.ptr, "l3", 2);
+    l = kg_str_chop_first_line(&str);
     kgt_expect_true(kg_str_is_empty(str));
 }
 
@@ -492,11 +505,11 @@ void test_quicksort() {
     isize values[7]      = {7,4,1,2,3,5,6};
     isize values_copy[7] = {7,4,1,2,3,5,6};
     isize expected[7]    = {1,2,3,4,5,6,7};
-    kg_quicksort(values, 0, 0, kg_sizeof(isize), kg_mem_compare);
+    kg_quicksort(values, 0, 0, kg_sizeof(isize), kg_isize_compare);
     for (isize i = 0; i < len; i++) {
         kgt_expect_eq(values_copy[i], values[i]);
     }
-    kg_quicksort(values, 0, len, kg_sizeof(isize), kg_mem_compare);
+    kg_quicksort(values, 0, len, kg_sizeof(isize), kg_isize_compare);
     for (isize i = 0; i < len; i++) {
         kgt_expect_eq(expected[i], values[i]);
     }
@@ -714,6 +727,7 @@ int main() {
         kgt_register(test_str_trim_suffix),
         kgt_register(test_str_sub),
         kgt_register(test_str_chop_first_split_by),
+        kgt_register(test_str_chop_first_line),
         kgt_register(test_duration_since),
         kgt_register(test_time_diff),
         kgt_register(test_time_add),
