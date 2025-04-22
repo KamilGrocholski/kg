@@ -107,15 +107,15 @@ void kg_assert_handler(const char* prefix, const char* condition, const char* fi
 #define kg_assert(cond)               kg_assert_fmt(cond, null)
 #define kg_panic(fmt, ...)            kg_assert_handler("Panic", null, __FILE__, kg_cast(isize)__LINE__, fmt, ##__VA_ARGS__)
 
-void* kg_mem_alloc  (isize size);
-void* kg_mem_resize (void* ptr, isize size);
-void  kg_mem_free   (void* ptr);
-void* kg_mem_copy   (void* dest, const void* src, isize size);
-void* kg_mem_set    (void* dest, u8 byte_value, isize size);
-void* kg_mem_zero   (void* dest, isize size);
-i32   kg_mem_compare(const void* a, const void* b, isize size);
-void  kg_mem_swap   (void* a, void* b, isize size);
-void* kg_mem_move   (void* dest, const void* src, isize size);
+void* kg_mem_alloc_zero(isize size);
+void* kg_mem_resize    (void* ptr, isize size);
+void  kg_mem_free      (void* ptr);
+void* kg_mem_copy      (void* dest, const void* src, isize size);
+void* kg_mem_set       (void* dest, u8 byte_value, isize size);
+void* kg_mem_zero      (void* dest, isize size);
+i32   kg_mem_compare   (const void* a, const void* b, isize size);
+void  kg_mem_swap      (void* a, void* b, isize size);
+void* kg_mem_move      (void* dest, const void* src, isize size);
 
 typedef struct kg_allocator_t kg_allocator_t;
 
@@ -147,9 +147,6 @@ typedef struct kg_allocator_tracking_context_t {
 } kg_allocator_tracking_context_t;
 void           kg_allocator_tracking_context_print(const kg_allocator_tracking_context_t ctx);
 kg_allocator_t kg_allocator_tracking(kg_allocator_tracking_context_t* ctx);
-
-#define kg_allocator_alloc_one(a, T)      (T*)(kg_allocator_alloc(a, kg_sizeof(T)))
-#define kg_allocator_alloc_array(a, T, n) (T*)(kg_allocator_alloc(a, kg_sizeof(T) * n))
 
 void* kg_allocator_alloc     (kg_allocator_t* a, isize s);
 void* kg_allocator_alloc_zero(kg_allocator_t* a, isize s);
@@ -616,8 +613,8 @@ i32 kg_i64_compare  (const void* a, const void* b);
 #include <sys/time.h>
 #include <sys/stat.h>
 
-kg_inline void* kg_mem_alloc(isize size) {
-    return malloc(size);
+kg_inline void* kg_mem_alloc_zero(isize size) {
+    return calloc(1, size);
 }
 kg_inline void* kg_mem_resize(void* ptr, isize size) {
     return realloc(ptr, size);
@@ -650,13 +647,13 @@ kg_inline void* kg_mem_move(void* dest, const void* src, isize size) {
 kg_inline void* kg_allocator_alloc(kg_allocator_t* a, isize s) {
     return a->proc.alloc(a, s);
 }
-kg_inline void* kg_allocator_alloc_zero(kg_allocator_t* a, isize s) {
-    void* out_mem = kg_allocator_alloc(a, s);
-    if (out_mem) {
-        kg_mem_zero(out_mem, s);
-    }
-    return out_mem;
-}
+/*kg_inline void* kg_allocator_alloc_zero(kg_allocator_t* a, isize s) {*/
+/*    void* out_mem = kg_allocator_alloc(a, s);*/
+/*    if (out_mem) {*/
+/*        kg_mem_zero(out_mem, s);*/
+/*    }*/
+/*    return out_mem;*/
+/*}*/
 kg_inline void kg_allocator_free(kg_allocator_t* a, void* ptr, isize s) {
     a->proc.free(a, ptr, s);
 }
@@ -669,7 +666,7 @@ kg_inline void* kg_allocator_resize(kg_allocator_t* a, void* ptr, isize old_size
 
 void* kg_allocator_default_alloc(kg_allocator_t* a, isize size) {
     kg_cast(void)a;
-    return kg_mem_alloc(size);
+    return kg_mem_alloc_zero(size);
 }
 void kg_allocator_default_free(kg_allocator_t* a, void* ptr, isize size) {
     kg_cast(void)a;
@@ -770,7 +767,7 @@ b32 kg_arena_create(kg_arena_t* a, kg_allocator_t* allocator, isize max_size) {
     b32 out_ok = false;
     kg_arena_t arena = {
         .allocator      = allocator,
-        .real_ptr       = allocator->proc.alloc(allocator, max_size),
+        .real_ptr       = kg_allocator_alloc(allocator, max_size),
         .max_size       = max_size,
         .allocated_size = 0,
     };
@@ -785,7 +782,7 @@ void* kg_arena_alloc(kg_arena_t* a, isize size) {
     if (a && size > 0) {
         isize available = kg_arena_available(a);
         if (available >= size) {
-            out = a->allocator->proc.alloc(a->allocator, size);
+            out = kg_cast(u8*)a->real_ptr + a->allocated_size;
             if (out) {
                 a->allocated_size += size;
             }
@@ -2130,7 +2127,7 @@ kg_file_content_t kg_file_content_read(kg_allocator_t* a, const char* filename) 
     if (kg_file_open(&f, filename, KG_FILE_MODE_READ, false)) {
         isize size = kg_file_size(&f);
         if (size >= 0) {
-            out_content.cstr = kg_allocator_alloc_array(a, char, size + 1);
+            out_content.cstr = kg_cast(char*)kg_allocator_alloc(a, size + 1);
             if (out_content.cstr) {
                 kg_mem_zero(out_content.cstr, size + 1);
                 isize bytes_read = fread(out_content.cstr, 1, size, kg_cast(FILE*)f.handle);
@@ -2178,7 +2175,7 @@ void kg_time_sleep(const kg_duration_t d) {
     };
     kg_assert_fmt(nanosleep(&ts, null) == 0, "not my fault");
 }
-kg_time_t kg_time_now(void) {
+kg_inline kg_time_t kg_time_now(void) {
     kg_time_t out = (kg_time_t){0};
     kg_assert_fmt(clock_gettime(CLOCK_REALTIME, &out.wall) == 0, "not my fault");
     kg_assert_fmt(clock_gettime(CLOCK_MONOTONIC, &out.monotonic) == 0, "not my fault");
@@ -2587,7 +2584,7 @@ b32 kg_pool_create(kg_pool_t* p, kg_allocator_t* a, isize n) {
             .allocator = a,
             .workers_n = n,
         };
-        p->workers = kg_allocator_alloc_zero(p->allocator, kg_sizeof(kg_thread_t) * p->workers_n);
+        p->workers = kg_allocator_alloc(p->allocator, kg_sizeof(kg_thread_t) * p->workers_n);
         if (p->workers) {
             if (!kg_mutex_create(&p->work_mutex)) goto cleanup;
             if (!kg_cond_create(&p->work_cond)) goto cleanup;
