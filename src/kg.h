@@ -108,6 +108,7 @@ void kg_assert_handler(const char* prefix, const char* condition, const char* fi
 #define kg_panic(fmt, ...)            kg_assert_handler("Panic", null, __FILE__, kg_cast(isize)__LINE__, fmt, ##__VA_ARGS__)
 
 void* kg_mem_alloc_zero(isize size);
+void* kg_mem_alloc     (isize size);
 void* kg_mem_resize    (void* ptr, isize size);
 void  kg_mem_free      (void* ptr);
 void* kg_mem_copy      (void* dest, const void* src, isize size);
@@ -127,6 +128,7 @@ typedef struct kg_arena_t {
 } kg_arena_t;
 
 b32   kg_arena_create   (kg_arena_t* a, kg_allocator_t* allocator, isize max_size);
+void* kg_arena_alloc    (kg_arena_t* a, isize size);
 isize kg_arena_allocated(const kg_arena_t* a);
 isize kg_arena_available(const kg_arena_t* a);
 isize kg_arena_mem_size (const kg_arena_t* a);
@@ -148,11 +150,10 @@ typedef struct kg_allocator_tracking_context_t {
 void           kg_allocator_tracking_context_print(const kg_allocator_tracking_context_t ctx);
 kg_allocator_t kg_allocator_tracking(kg_allocator_tracking_context_t* ctx);
 
-void* kg_allocator_alloc     (kg_allocator_t* a, isize s);
-void* kg_allocator_alloc_zero(kg_allocator_t* a, isize s);
-void  kg_allocator_free      (kg_allocator_t* a, void* ptr, isize s);
-void  kg_allocator_free_all  (kg_allocator_t* a, b32 clear);
-void* kg_allocator_resize    (kg_allocator_t* a, void* ptr, isize old_size, isize new_size);
+void* kg_allocator_alloc   (kg_allocator_t* a, isize s);
+void  kg_allocator_free    (kg_allocator_t* a, void* ptr, isize s);
+void  kg_allocator_free_all(kg_allocator_t* a, b32 clear);
+void* kg_allocator_resize  (kg_allocator_t* a, void* ptr, isize old_size, isize new_size);
 
 typedef void* (*kg_allocator_allocate_fn_t)(kg_allocator_t* a, isize size);
 typedef void  (*kg_allocator_free_fn_t)    (kg_allocator_t* a, void* ptr, isize size);
@@ -448,7 +449,7 @@ void*   kg_darray_grow_                  (void* d, isize n);
 #define kg_darray_stride(d)              (d ? kg_darray_header(d)->stride : 0)
 #define kg_darray_allocator(d)           (d ? kg_darray_header(d)->allocator : null)
 #define kg_darray_grow(d, n)             do { (d) = kg_darray_grow_(d, n); } while(0)
-#define kg_darray_grow_formula(d, n)     do { (d) = kg_darray_grow_(d, kg_darray_cap(d) * 2 + n); } while(0)
+#define kg_darray_grow_formula(d, n)     do { (d) = kg_darray_grow_(d, kg_darray_cap(d) + n); } while(0)
 #define kg_darray_available(d)           (kg_darray_cap(d) > kg_darray_len(d) ? kg_darray_cap(d) - kg_darray_len(d) : 0)
 #define kg_darray_ensure_available(d, n) do { \
     if (kg_darray_available(d) < n) { \
@@ -616,6 +617,9 @@ i32 kg_i64_compare  (const void* a, const void* b);
 kg_inline void* kg_mem_alloc_zero(isize size) {
     return calloc(1, size);
 }
+kg_inline void* kg_mem_alloc(isize size) {
+    return malloc(size);
+}
 kg_inline void* kg_mem_resize(void* ptr, isize size) {
     return realloc(ptr, size);
 }
@@ -647,13 +651,6 @@ kg_inline void* kg_mem_move(void* dest, const void* src, isize size) {
 kg_inline void* kg_allocator_alloc(kg_allocator_t* a, isize s) {
     return a->proc.alloc(a, s);
 }
-/*kg_inline void* kg_allocator_alloc_zero(kg_allocator_t* a, isize s) {*/
-/*    void* out_mem = kg_allocator_alloc(a, s);*/
-/*    if (out_mem) {*/
-/*        kg_mem_zero(out_mem, s);*/
-/*    }*/
-/*    return out_mem;*/
-/*}*/
 kg_inline void kg_allocator_free(kg_allocator_t* a, void* ptr, isize s) {
     a->proc.free(a, ptr, s);
 }
@@ -834,11 +831,13 @@ void kg_allocator_temp_free_all(kg_allocator_t* a, b32 clear) {
     }
 }
 void* kg_allocator_temp_resize(kg_allocator_t* a, void* ptr, isize old_size, isize new_size) {
-    kg_cast(void)ptr;
     kg_cast(void)old_size;
     void* out_mem = null;
     kg_arena_t* arena = kg_cast(kg_arena_t*)a->context;
     out_mem = kg_arena_alloc(arena, new_size);
+    if (out_mem) {
+        kg_mem_copy(out_mem, ptr, old_size);
+    }
     return out_mem;
 }
 kg_inline kg_allocator_t kg_allocator_temp(kg_arena_t* a) {
