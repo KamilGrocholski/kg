@@ -319,12 +319,12 @@ b32         kg_string_builder_write_string    (kg_string_builder_t* b, const kg_
 b32         kg_string_builder_write_string_n  (kg_string_builder_t* b, const kg_string_t s, isize n);
 b32         kg_string_builder_grow            (kg_string_builder_t* b, isize n);
 b32         kg_string_builder_grow_formula    (kg_string_builder_t* b, isize n);
-b32         kg_string_builder_cap             (const kg_string_builder_t* b);
-b32         kg_string_builder_len             (const kg_string_builder_t* b);
-b32         kg_string_builder_available       (const kg_string_builder_t* b);
 b32         kg_string_builder_ensure_available(kg_string_builder_t* b, isize n);
 kg_string_t kg_string_builder_to_string       (const kg_string_builder_t* b, kg_allocator_t* a);
 isize       kg_string_builder_mem_size        (const kg_string_builder_t* b);
+isize       kg_string_builder_cap             (const kg_string_builder_t* b);
+isize       kg_string_builder_len             (const kg_string_builder_t* b);
+isize       kg_string_builder_available       (const kg_string_builder_t* b);
 void        kg_string_builder_reset           (kg_string_builder_t* b);
 void        kg_string_builder_destroy         (kg_string_builder_t* b);
 
@@ -1759,6 +1759,7 @@ b32 kg_string_builder_create(kg_string_builder_t* b, kg_allocator_t* a, isize ca
         .real_ptr  = kg_allocator_alloc(a, cap),
     };
     if (b->real_ptr) {
+        b->write_ptr = b->real_ptr;
         out_ok = true;
     }
     return out_ok;
@@ -1844,9 +1845,7 @@ b32 kg_string_builder_write_fmt_v(kg_string_builder_t* b, const char* fmt, va_li
 kg_inline b32 kg_string_builder_write_cstr(kg_string_builder_t* b, const char* c) {
     b32 out_ok = false;
     isize len = kg_cstr_len(c);
-    if (len > 0) {
-        out_ok = kg_string_builder_write_unsafe(b, c, len);
-    }
+    out_ok = kg_string_builder_write_unsafe(b, c, len);
     return out_ok;
 }
 kg_inline b32 kg_string_builder_write_cstr_n(kg_string_builder_t* b, const char* c, isize n) {    
@@ -1879,15 +1878,15 @@ kg_inline b32 kg_string_builder_grow(kg_string_builder_t* b, isize n) {
     }
     return out_ok;
 }
-kg_inline b32 kg_string_builder_cap(const kg_string_builder_t* b) {
+kg_inline isize kg_string_builder_cap(const kg_string_builder_t* b) {
     return b ? b->cap : 0;
 }
-kg_inline b32 kg_string_builder_len(const kg_string_builder_t* b) {
+kg_inline isize kg_string_builder_len(const kg_string_builder_t* b) {
     return b ? b->len : 0;
 }
-kg_inline b32 kg_string_builder_available(const kg_string_builder_t* b) {
+kg_inline isize kg_string_builder_available(const kg_string_builder_t* b) {
     b32 out = 0;
-    if (b && b->cap < b->len) {
+    if (b && b->cap > b->len) {
         out = b->cap - b->len;
     }
     return out;
@@ -1908,7 +1907,7 @@ kg_string_t kg_string_builder_to_string(const kg_string_builder_t* b, kg_allocat
     return kg_string_from_cstr_n(a, b->real_ptr, b->len);
 }
 kg_inline b32 kg_string_builder_grow_formula(kg_string_builder_t* b, isize n) {
-    return kg_string_builder_grow(b, b->cap * 2 + n);
+    return kg_string_builder_grow(b, kg_max(b->cap * 2, b->cap + n));
 }
 kg_inline isize kg_string_builder_mem_size(const kg_string_builder_t* b) {
     return b ? b->cap : 0;
